@@ -1,6 +1,7 @@
 import { store } from '../store';
 import { DragSource, DropTarget } from '../typings';
 import { isSlotWithItem } from '../helpers';
+import { promptMoveAmount } from '../helpers/amountPrompt';
 import { Items } from '../store/items';
 import { craftItem } from '../thunks/craftItem';
 
@@ -24,21 +25,17 @@ export const onCraft = (source: DragSource, target: DropTarget) => {
 
   if (targetSlot === undefined) return console.error(`Target slot undefined`);
 
-  const count = state.itemAmount === 0 ? 1 : state.itemAmount;
+  promptMoveAmount(99, 1).then((count) => {
+    if (!count) return;
 
-  const data = {
-    fromSlot: sourceSlot,
-    toSlot: targetSlot,
-    fromType: sourceInventory.type,
-    toType: targetInventory.type,
-    count,
-  };
-
-  store.dispatch(
-    craftItem({
-      ...data,
-      fromSlot: sourceSlot.slot,
-      toSlot: targetSlot.slot,
-    })
-  );
+    store.dispatch(
+      craftItem({
+        fromSlot: sourceSlot.slot,
+        toSlot: targetSlot.slot,
+        fromType: sourceInventory.type,
+        toType: targetInventory.type,
+        count,
+      })
+    );
+  });
 };

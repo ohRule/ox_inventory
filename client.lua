@@ -123,6 +123,68 @@ local CraftingBenches = require 'modules.crafting.client'
 local Vehicles = lib.load('data.vehicles')
 local Inventory = require 'modules.inventory.client'
 
+-- Hotbar keys bind to items without moving them out of the inventory
+local HOTBAR_SIZE = 5
+local hotbarBinds = {}
+
+local function getHotbarPayload()
+	local payload = {}
+
+	for i = 1, HOTBAR_SIZE do
+		payload[i] = hotbarBinds[i] or false
+	end
+
+	return payload
+end
+
+local function saveHotbarBinds()
+	SetResourceKvp('ox_inventory:hotbarBinds', json.encode(getHotbarPayload()))
+end
+
+local function loadHotbarBinds()
+	hotbarBinds = {}
+	local raw = GetResourceKvpString('ox_inventory:hotbarBinds')
+	if not raw then return end
+
+	local decoded = json.decode(raw)
+	if type(decoded) ~= 'table' then return end
+
+	for i = 1, HOTBAR_SIZE do
+		local bind = decoded[i] or decoded[tostring(i)]
+		if type(bind) == 'table' and type(bind.name) == 'string' then
+			hotbarBinds[i] = {
+				slot = tonumber(bind.slot),
+				name = bind.name,
+				serial = bind.serial
+			}
+		end
+	end
+end
+
+---@param index number
+---@return number?
+local function resolveHotbarSlot(index)
+	local bind = hotbarBinds[index]
+	if not bind or not bind.name then return end
+
+	local inventory = PlayerData.inventory
+	if not inventory then return end
+
+	local slotItem = bind.slot and inventory[bind.slot]
+	if slotItem and slotItem.name == bind.name and (not bind.serial or slotItem.metadata?.serial == bind.serial) then
+		return bind.slot
+	end
+
+	for slot, item in pairs(inventory) do
+		if item and item.name == bind.name and (not bind.serial or item.metadata?.serial == bind.serial) then
+			bind.slot = slot
+			return slot
+		end
+	end
+end
+
+loadHotbarBinds()
+
 ---@param inv string?
 ---@param data any?
 ---@return boolean?
@@ -880,7 +942,8 @@ local function registerCommands()
 			defaultKey = tostring(i),
 			onPressed = function()
 				if invOpen or EnableWeaponWheel or not invHotkeys or IsNuiFocused() then return end
-				useSlot(i)
+				local slot = resolveHotbarSlot(i)
+				if slot then useSlot(slot) end
 			end
 		})
 	end
@@ -1346,7 +1409,8 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 				items = PlayerData.inventory,
 				maxWeight = shared.playerweight,
 			},
-			imagepath = client.imagepath
+			imagepath = client.imagepath,
+			hotbarBinds = getHotbarPayload()
 		}
 	})
 
@@ -1619,6 +1683,10 @@ end)
 RegisterNUICallback('uiLoaded', function(_, cb)
 	client.uiLoaded = true
 	cb(1)
+
+	if PlayerData.loaded then
+		SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
+	end
 end)
 
 RegisterNUICallback('getItemData', function(itemName, cb)
@@ -1673,6 +1741,48 @@ end)
 
 RegisterNUICallback('useItem', function(slot, cb)
 	useSlot(slot --[[@as number]])
+	cb(1)
+end)
+
+RegisterNUICallback('bindHotbar', function(data, cb)
+	local index = tonumber(data.index)
+	if not index or index < 1 or index > HOTBAR_SIZE then return cb(0) end
+
+	local name = data.name
+	local slot = tonumber(data.slot)
+	if type(name) ~= 'string' or not slot then return cb(0) end
+
+	local item = PlayerData.inventory and PlayerData.inventory[slot]
+	if not item or item.name ~= name then
+		slot = Inventory.GetSlotIdWithItem(name, data.serial and { serial = data.serial } or nil)
+		item = slot and PlayerData.inventory[slot]
+		if not item then return cb(0) end
+	end
+
+	hotbarBinds[index] = {
+		slot = item.slot,
+		name = item.name,
+		serial = item.metadata and item.metadata.serial or nil
+	}
+	saveHotbarBinds()
+	cb(1)
+end)
+
+RegisterNUICallback('unbindHotbar', function(data, cb)
+	local index = tonumber(data.index)
+	if index and index >= 1 and index <= HOTBAR_SIZE then
+		hotbarBinds[index] = nil
+		saveHotbarBinds()
+	end
+	cb(1)
+end)
+
+RegisterNUICallback('swapHotbar', function(data, cb)
+	local from, to = tonumber(data.from), tonumber(data.to)
+	if not from or not to or from < 1 or to < 1 or from > HOTBAR_SIZE or to > HOTBAR_SIZE then return cb(0) end
+
+	hotbarBinds[from], hotbarBinds[to] = hotbarBinds[to], hotbarBinds[from]
+	saveHotbarBinds()
 	cb(1)
 end)
 

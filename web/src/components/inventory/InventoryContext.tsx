@@ -1,6 +1,6 @@
 import { onUse } from '../../dnd/onUse';
 import { onGive } from '../../dnd/onGive';
-import { onDrop } from '../../dnd/onDrop';
+import { onDrop, onSplit } from '../../dnd/onDrop';
 import { Items } from '../../store/items';
 import { fetchNui } from '../../utils/fetchNui';
 import { Locale } from '../../store/locale';
@@ -52,6 +52,9 @@ const InventoryContext: React.FC = () => {
       case 'drop':
         isSlotWithItem(item) && onDrop({ item: item, inventory: 'player' });
         break;
+      case 'split':
+        isSlotWithItem(item) && item.count > 1 && onSplit(item);
+        break;
       case 'remove':
         fetchNui('removeComponent', { component: data?.component, slot: data?.slot });
         break;
@@ -94,6 +97,9 @@ const InventoryContext: React.FC = () => {
       <Menu>
         <MenuItem onClick={() => handleClick({ action: 'use' })} label={Locale.ui_use || 'Use'} />
         <MenuItem onClick={() => handleClick({ action: 'give' })} label={Locale.ui_give || 'Give'} />
+        {item && item.count > 1 && (
+          <MenuItem onClick={() => handleClick({ action: 'split' })} label={Locale.ui_split || 'Split'} />
+        )}
         <MenuItem onClick={() => handleClick({ action: 'drop' })} label={Locale.ui_drop || 'Drop'} />
         {item && item.metadata?.ammo > 0 && (
           <MenuItem onClick={() => handleClick({ action: 'removeAmmo' })} label={Locale.ui_remove_ammo} />

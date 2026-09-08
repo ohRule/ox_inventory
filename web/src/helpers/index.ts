@@ -5,6 +5,8 @@ import { Items } from '../store/items';
 import { imagepath } from '../store/imagepath';
 import { fetchNui } from '../utils/fetchNui';
 
+export { HOTBAR_SLOTS } from './constants';
+
 export const canPurchaseItem = (item: Slot, inventory: { type: Inventory['type']; groups: Inventory['groups'] }) => {
   if (inventory.type !== 'shop' || !isSlotWithItem(item)) return true;
 
@@ -81,6 +83,22 @@ export const canCraftItem = (item: Slot, inventoryType: string) => {
 export const isSlotWithItem = (slot: Slot, strict: boolean = false): slot is SlotWithItem =>
   (slot.name !== undefined && slot.weight !== undefined) ||
   (strict && slot.name !== undefined && slot.count !== undefined && slot.weight !== undefined);
+
+/** Find the live inventory item a hotbar bind currently points at. */
+export const resolveHotbarItem = (
+  bind: { slot: number; name: string; serial?: string } | null | undefined,
+  items: Slot[]
+): SlotWithItem | undefined => {
+  if (!bind?.name) return;
+
+  const matches = (item: Slot): item is SlotWithItem =>
+    isSlotWithItem(item) && item.name === bind.name && (!bind.serial || item.metadata?.serial === bind.serial);
+
+  const bySlot = items[bind.slot - 1];
+  if (bySlot && matches(bySlot)) return bySlot;
+
+  return items.find(matches);
+};
 
 export const canStack = (sourceSlot: Slot, targetSlot: Slot) =>
   sourceSlot.name === targetSlot.name && isEqual(sourceSlot.metadata, targetSlot.metadata);

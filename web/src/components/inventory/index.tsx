@@ -13,6 +13,9 @@ import { closeTooltip } from '../../store/tooltip';
 import InventoryContext from './InventoryContext';
 import { closeContextMenu } from '../../store/contextMenu';
 import Fade from '../utils/transitions/Fade';
+import { setupHotbar, HotbarPayload } from '../../store/hotbar';
+import AmountDialog from './AmountDialog';
+import { cancelAmountPrompt } from '../../helpers/amountPrompt';
 
 const Inventory: React.FC = () => {
   const [inventoryVisible, setInventoryVisible] = useState(false);
@@ -23,6 +26,7 @@ const Inventory: React.FC = () => {
     setInventoryVisible(false);
     dispatch(closeContextMenu());
     dispatch(closeTooltip());
+    cancelAmountPrompt();
   });
   useExitListener(setInventoryVisible);
 
@@ -35,6 +39,10 @@ const Inventory: React.FC = () => {
   });
 
   useNuiEvent('refreshSlots', (data) => dispatch(refreshSlots(data)));
+
+  useNuiEvent('setupHotbar', (data: HotbarPayload) => {
+    dispatch(setupHotbar(data));
+  });
 
   useNuiEvent('displayMetadata', (data: Array<{ metadata: string; value: string }>) => {
     dispatch(setAdditionalMetadata(data));
@@ -50,6 +58,9 @@ const Inventory: React.FC = () => {
           <Tooltip />
           <InventoryContext />
         </div>
+        <AmountDialog />
+        {/* Separate bind hotbar; dragging here assigns a shortcut without moving the item */}
+        <InventoryHotbar interactive />
       </Fade>
       <InventoryHotbar />
     </>

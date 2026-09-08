@@ -1,4 +1,5 @@
 import { isSlotWithItem } from '../helpers';
+import { promptMoveAmount } from '../helpers/amountPrompt';
 import { store } from '../store';
 import { DragSource, DropTarget } from '../typings';
 import { Items } from '../store/items';
@@ -24,28 +25,19 @@ export const onBuy = (source: DragSource, target: DropTarget) => {
 
   if (targetSlot === undefined) return console.error(`Target slot undefined`);
 
-  const count =
-    state.itemAmount !== 0
-      ? sourceSlot.count
-        ? state.itemAmount > sourceSlot.count
-          ? sourceSlot.count
-          : state.itemAmount
-        : state.itemAmount
-      : 1;
+  const max = sourceSlot.count || 99;
 
-  const data = {
-    fromSlot: sourceSlot,
-    toSlot: targetSlot,
-    fromType: sourceInventory.type,
-    toType: targetInventory.type,
-    count: count,
-  };
+  promptMoveAmount(max, 1).then((count) => {
+    if (!count) return;
 
-  store.dispatch(
-    buyItem({
-      ...data,
-      fromSlot: sourceSlot.slot,
-      toSlot: targetSlot.slot,
-    })
-  );
+    store.dispatch(
+      buyItem({
+        fromSlot: sourceSlot.slot,
+        toSlot: targetSlot.slot,
+        fromType: sourceInventory.type,
+        toType: targetInventory.type,
+        count,
+      })
+    );
+  });
 };

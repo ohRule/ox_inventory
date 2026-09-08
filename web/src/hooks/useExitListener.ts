@@ -4,6 +4,7 @@ import { fetchNui } from '../utils/fetchNui';
 import { closeTooltip } from '../store/tooltip';
 import { useAppDispatch } from '../store';
 import { closeContextMenu } from '../store/contextMenu';
+import { cancelAmountPrompt, isAmountPromptOpen } from '../helpers/amountPrompt';
 
 type FrameVisibleSetter = (bool: boolean) => void;
 
@@ -21,6 +22,11 @@ export const useExitListener = (visibleSetter: FrameVisibleSetter) => {
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
       if (LISTENED_KEYS.includes(e.code)) {
+        if (isAmountPromptOpen()) {
+          cancelAmountPrompt();
+          return;
+        }
+
         setterRef.current(false);
         dispatch(closeTooltip());
         dispatch(closeContextMenu());

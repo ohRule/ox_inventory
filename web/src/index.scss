@@ -55,6 +55,7 @@ input[type='number']::-webkit-outer-spin-button {
   height: 100%;
   width: 100%;
   color: white;
+  position: relative;
 }
 
 .context-menu-list {
@@ -133,8 +134,11 @@ body.inv-dragging {
   justify-content: center;
   align-items: center;
   height: 100%;
+  box-sizing: border-box;
+  // Leave room for the separated hotbar at the bottom of the screen
+  padding-bottom: calc(#{$gridSize} + 4vh);
 
-  gap: 20px;
+  gap: 40px;
 }
 
 .inventory-control {
@@ -199,6 +203,81 @@ body.inv-dragging {
 
 .useful-controls-dialog-overlay {
   background-color: rgba(0, 0, 0, 0.5);
+}
+
+.amount-dialog-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 29;
+  background: none;
+}
+
+.amount-dialog {
+  position: absolute;
+  left: 50%;
+  bottom: calc(#{$gridSize} + 4vh);
+  transform: translateX(-50%);
+  z-index: 30;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 4px;
+  background-color: $mainColor;
+  color: $textColor;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.amount-dialog-title {
+  font-size: 16px;
+  font-family: $mainFont;
+}
+
+.amount-dialog-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: #c1c2c5;
+  cursor: pointer;
+}
+
+.amount-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 8px;
+  border: none;
+  border-radius: 2.5%;
+  outline: none;
+  text-align: center;
+  font-family: $mainFont;
+  font-size: 16px;
+  color: #fff;
+  background-color: $secondaryColor;
+  &:focus-within {
+    background-color: $secondaryColorDark;
+  }
+}
+
+.amount-dialog-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.amount-dialog-button {
+  flex: 1;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 2.5%;
+  text-transform: uppercase;
+  font-family: $mainFont;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background-color: $secondaryColor;
+  &:hover {
+    background-color: $secondaryColorDark;
+    cursor: pointer;
+  }
 }
 
 .useful-controls-dialog-title {
@@ -457,11 +536,24 @@ body.inv-dragging {
 .hotbar-container {
   display: flex;
   align-items: center;
-  gap: 2px;
   justify-content: center;
   width: 100%;
   position: absolute;
+  left: 0;
   bottom: 2vh;
+  z-index: 2;
+}
+
+.hotbar-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.hotbar-slots {
+  display: flex;
+  gap: 2px;
 }
 
 .hotbar-item-slot {
@@ -470,10 +562,57 @@ body.inv-dragging {
   height: $gridSize;
 }
 
+// Interactive hotbar (inventory open): sized wrappers around InventorySlot
+.hotbar-slot {
+  width: $gridSize;
+  height: $gridSize;
+  flex-shrink: 0;
+
+  > .inventory-slot {
+    width: 100%;
+    height: 100%;
+  }
+}
+
 .hotbar-slot-header-wrapper {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+}
+
+.hotbar-unbind-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 6px;
+  height: 4vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-transform: uppercase;
+  font-family: $mainFont;
+  font-size: 12px;
+  font-weight: 500;
+  color: $textColor;
+  background-color: $secondaryColor;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 2.5%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms;
+}
+
+.hotbar-unbind-zone-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hotbar-unbind-zone-active {
+  background-color: $secondaryColorDark;
+  border-color: rgba(255, 255, 255, 0.75);
+  color: #fff;
 }
 
 // item notifications

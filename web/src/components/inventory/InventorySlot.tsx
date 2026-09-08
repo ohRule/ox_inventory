@@ -7,7 +7,6 @@ import { onDrop } from '../../dnd/onDrop';
 import { onBuy } from '../../dnd/onBuy';
 import { Items } from '../../store/items';
 import { canCraftItem, canPurchaseItem, getItemUrl, isSlotWithItem } from '../../helpers';
-import { onUse } from '../../dnd/onUse';
 import { Locale } from '../../store/locale';
 import { onCraft } from '../../dnd/onCraft';
 import useNuiEvent from '../../hooks/useNuiEvent';
@@ -15,6 +14,7 @@ import { ItemsPayload } from '../../reducers/refreshSlots';
 import { closeTooltip, openTooltip } from '../../store/tooltip';
 import { openContextMenu } from '../../store/contextMenu';
 import { useMergeRefs } from '@floating-ui/react';
+import { onUnbindHotbar } from '../../dnd/onHotbar';
 
 interface SlotProps {
   inventoryId: Inventory['id'];
@@ -59,12 +59,17 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
 
   const [{ isOver }, drop] = useDrop<DragSource, void, { isOver: boolean }>(
     () => ({
-      accept: 'SLOT',
+      accept: ['SLOT', 'HOTBAR'],
       collect: (monitor) => ({
         isOver: monitor.isOver(),
       }),
       drop: (source) => {
         dispatch(closeTooltip());
+        // Dropping a hotbar bind onto the inventory only removes the shortcut
+        if (source.inventory === InventoryType.HOTBAR) {
+          onUnbindHotbar(source.item.slot);
+          return;
+        }
         switch (source.inventory) {
           case InventoryType.SHOP:
             onBuy(source, { inventory: inventoryType, item: { slot: item.slot } });
@@ -77,10 +82,14 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
             break;
         }
       },
-      canDrop: (source) =>
-        (source.item.slot !== item.slot || source.inventory !== inventoryType) &&
-        inventoryType !== InventoryType.SHOP &&
-        inventoryType !== InventoryType.CRAFTING,
+      canDrop: (source) => {
+        if (source.inventory === InventoryType.HOTBAR) return true;
+        return (
+          (source.item.slot !== item.slot || source.inventory !== inventoryType) &&
+          inventoryType !== InventoryType.SHOP &&
+          inventoryType !== InventoryType.CRAFTING
+        );
+      },
     }),
     [inventoryType, item]
   );
@@ -113,10 +122,8 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     dispatch(closeTooltip());
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (event.ctrlKey && isSlotWithItem(item) && inventoryType !== 'shop' && inventoryType !== 'crafting') {
+    if (event.shiftKey && isSlotWithItem(item) && inventoryType !== 'shop' && inventoryType !== 'crafting') {
       onDrop({ item: item, inventory: inventoryType });
-    } else if (event.altKey && isSlotWithItem(item) && inventoryType === 'player') {
-      onUse(item);
     }
   };
 
@@ -154,12 +161,7 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
             }
           }}
         >
-          <div
-            className={
-              inventoryType === 'player' && item.slot <= 5 ? 'item-hotslot-header-wrapper' : 'item-slot-header-wrapper'
-            }
-          >
-            {inventoryType === 'player' && item.slot <= 5 && <div className="inventory-slot-number">{item.slot}</div>}
+          <div className="item-slot-header-wrapper">
             <div className="item-slot-info-wrapper">
               <p>
                 {item.weight > 0
