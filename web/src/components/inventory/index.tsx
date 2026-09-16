@@ -59,10 +59,9 @@ const Inventory: React.FC = () => {
           <InventoryContext />
         </div>
         <AmountDialog />
-        {/* Separate bind hotbar; dragging here assigns a shortcut without moving the item */}
-        <InventoryHotbar interactive />
       </Fade>
-      <InventoryHotbar />
+      {/* Single always-on hotbar; interactive only while inventory is open */}
+      <InventoryHotbar inventoryOpen={inventoryVisible} />
     </>
   );
 };

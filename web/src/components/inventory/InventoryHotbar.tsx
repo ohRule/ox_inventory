@@ -1,18 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { useDragLayer, useDrop } from 'react-dnd';
-import { getItemUrl, HOTBAR_SLOTS, isSlotWithItem, resolveHotbarItem } from '../../helpers';
+import { HOTBAR_SLOTS, resolveHotbarItem } from '../../helpers';
 import useNuiEvent from '../../hooks/useNuiEvent';
-import { Items } from '../../store/items';
-import WeightBar from '../utils/WeightBar';
 import { useAppSelector } from '../../store';
 import { selectIsBusy, selectLeftInventory } from '../../store/inventory';
 import { selectHotbarBinds } from '../../store/hotbar';
-import SlideUp from '../utils/transitions/SlideUp';
 import HotbarSlot from './HotbarSlot';
 import { onUse } from '../../dnd/onUse';
 import { onUnbindHotbar } from '../../dnd/onHotbar';
 import { DragSource, InventoryType } from '../../typings';
 import { Locale } from '../../store/locale';
+import { fetchNui } from '../../utils/fetchNui';
+
+const EyeIcon: React.FC<{ slashed?: boolean }> = ({ slashed = false }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+    {slashed ? (
+      <>
+        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+        <path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+        <line x1="2" y1="2" x2="22" y2="22" />
+      </>
+    ) : (
+      <>
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    )}
+  </svg>
+);
 
 /** Drop a hotbar bind here to remove the shortcut without moving the item. */
 const HotbarUnbindZone: React.FC = () => {
@@ -47,31 +63,31 @@ const HotbarUnbindZone: React.FC = () => {
 };
 
 interface InventoryHotbarProps {
-  /** When true, hotbar is shown with the inventory and accepts bind drag/drop + 1-5 use. */
-  interactive?: boolean;
+  /** Inventory is open: enable bind drag/drop, unbind zone, and 1-N use. */
+  inventoryOpen?: boolean;
 }
 
-const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ interactive = false }) => {
-  const [hotbarVisible, setHotbarVisible] = useState(false);
+const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false }) => {
+  // HUD hotbar stays on unless the player hides it with the toggle / keybind
+  const [hotbarVisible, setHotbarVisible] = useState(true);
   const items = useAppSelector(selectLeftInventory).items;
   const binds = useAppSelector(selectHotbarBinds);
   const isBusy = useAppSelector(selectIsBusy);
 
-  const [handle, setHandle] = useState<ReturnType<typeof setTimeout>>();
-  useNuiEvent('toggleHotbar', () => {
-    if (interactive) return;
-
-    if (hotbarVisible) {
-      setHotbarVisible(false);
-    } else {
-      if (handle) clearTimeout(handle);
-      setHotbarVisible(true);
-      setHandle(setTimeout(() => setHotbarVisible(false), 3000));
-    }
+  useNuiEvent<{ hotbarHud?: boolean }>('init', (data) => {
+    if (typeof data.hotbarHud === 'boolean') setHotbarVisible(data.hotbarHud);
   });
 
+  useNuiEvent<boolean>('setHotbarHud', (visible) => setHotbarVisible(!!visible));
+
+  const toggleHud = () => {
+    const next = !hotbarVisible;
+    setHotbarVisible(next);
+    fetchNui('setHotbarHud', { visible: next });
+  };
+
   useEffect(() => {
-    if (!interactive) return;
+    if (!inventoryOpen) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat || isBusy) return;
@@ -91,77 +107,59 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ interactive = false }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [interactive, binds, items, isBusy]);
+  }, [inventoryOpen, binds, items, isBusy]);
 
-  const slots = (
+  return (
     <div
-      className={`hotbar-container${interactive ? ' hotbar-container-interactive' : ''}`}
-      style={interactive ? { pointerEvents: isBusy ? 'none' : 'auto' } : undefined}
+      className={`hotbar-container${inventoryOpen ? ' hotbar-container-interactive' : ''}`}
+      style={inventoryOpen ? { pointerEvents: isBusy ? 'none' : 'auto' } : undefined}
     >
-      <div className="hotbar-inner">
-        {interactive && <HotbarUnbindZone />}
-        <div className="hotbar-slots">
-          {Array.from({ length: HOTBAR_SLOTS }, (_, i) => {
-            const index = i + 1;
-            const bind = binds[i] ?? null;
-            const item = resolveHotbarItem(bind, items);
+      <div className="hotbar-row">
+        {/* Matches the eye button width so the slots stay centered when it appears */}
+        {inventoryOpen && <div className="hotbar-toggle-spacer" aria-hidden="true" />}
+        {(hotbarVisible || inventoryOpen) && (
+          <div className="hotbar-inner">
+            {inventoryOpen && <HotbarUnbindZone />}
+            <div className="hotbar-slots">
+              {Array.from({ length: HOTBAR_SLOTS }, (_, i) => {
+                const index = i + 1;
+                const bind = binds[i] ?? null;
+                const item = resolveHotbarItem(bind, items);
 
-            if (interactive) {
-              return <HotbarSlot key={`hotbar-${index}`} index={index} bind={bind} item={item} />;
+                return (
+                  <HotbarSlot
+                    key={`hotbar-${index}`}
+                    index={index}
+                    bind={bind}
+                    item={item}
+                    interactive={inventoryOpen}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {inventoryOpen && (
+          <button
+            type="button"
+            className={`hotbar-toggle-btn${hotbarVisible ? ' hotbar-toggle-btn-on' : ''}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              toggleHud();
+            }}
+            title={
+              hotbarVisible
+                ? Locale.ui_hide_hotbar || 'Hide hotbar'
+                : Locale.ui_show_hotbar || 'Show hotbar'
             }
-
-            return (
-              <div
-                className="hotbar-item-slot"
-                style={{
-                  backgroundImage: `url(${item?.name ? getItemUrl(item) : 'none'}`,
-                }}
-                key={`hotbar-${index}`}
-              >
-                {item && isSlotWithItem(item) ? (
-                  <div className="item-slot-wrapper">
-                    <div className="hotbar-slot-header-wrapper">
-                      <div className="inventory-slot-number">{index}</div>
-                      <div className="item-slot-info-wrapper">
-                        <p>
-                          {item.weight > 0
-                            ? item.weight >= 1000
-                              ? `${(item.weight / 1000).toLocaleString('en-us', {
-                                  minimumFractionDigits: 2,
-                                })}kg `
-                              : `${item.weight.toLocaleString('en-us', {
-                                  minimumFractionDigits: 0,
-                                })}g `
-                            : ''}
-                        </p>
-                        <p>{item.count ? item.count.toLocaleString('en-us') + `x` : ''}</p>
-                      </div>
-                    </div>
-                    <div>
-                      {item.durability !== undefined && <WeightBar percent={item.durability} durability />}
-                      <div className="inventory-slot-label-box">
-                        <div className="inventory-slot-label-text">
-                          {item.metadata?.label ? item.metadata.label : Items[item.name]?.label || item.name}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="item-hotslot-header-wrapper">
-                    <div className="inventory-slot-number">{index}</div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          >
+            <EyeIcon slashed={!hotbarVisible} />
+          </button>
+        )}
       </div>
     </div>
   );
-
-  if (interactive) return slots;
-
-  return <SlideUp in={hotbarVisible}>{slots}</SlideUp>;
 };
 
 export default InventoryHotbar;

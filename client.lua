@@ -124,7 +124,7 @@ local Vehicles = lib.load('data.vehicles')
 local Inventory = require 'modules.inventory.client'
 
 -- Hotbar keys bind to items without moving them out of the inventory
-local HOTBAR_SIZE = 5
+local HOTBAR_SIZE = 6
 local hotbarBinds = {}
 
 local function getHotbarPayload()
@@ -159,6 +159,15 @@ local function loadHotbarBinds()
 			}
 		end
 	end
+end
+
+-- HUD hotbar is visible unless the player has hidden it (unset KVP defaults to on)
+local hotbarHudVisible = GetResourceKvpString('ox_inventory:hotbarHud') ~= '0'
+
+local function setHotbarHudVisible(visible)
+	hotbarHudVisible = visible and true or false
+	SetResourceKvp('ox_inventory:hotbarHud', hotbarHudVisible and '1' or '0')
+	SendNUIMessage({ action = 'setHotbarHud', data = hotbarHudVisible })
 end
 
 ---@param index number
@@ -930,12 +939,12 @@ local function registerCommands()
 		description = locale('disable_hotbar'),
 		defaultKey = client.keys[3],
 		onPressed = function()
-			if EnableWeaponWheel or not invHotkeys or IsNuiFocused() or lib.progressActive() then return end
-			SendNUIMessage({ action = 'toggleHotbar' })
+			if EnableWeaponWheel or not invHotkeys or invOpen or lib.progressActive() then return end
+			setHotbarHudVisible(not hotbarHudVisible)
 		end
 	})
 
-	for i = 1, 5 do
+	for i = 1, HOTBAR_SIZE do
 		lib.addKeybind({
 			name = ('hotkey%s'):format(i),
 			description = locale('use_hotbar', i),
@@ -1410,7 +1419,8 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 				maxWeight = shared.playerweight,
 			},
 			imagepath = client.imagepath,
-			hotbarBinds = getHotbarPayload()
+			hotbarBinds = getHotbarPayload(),
+			hotbarHud = hotbarHudVisible
 		}
 	})
 
@@ -1686,7 +1696,14 @@ RegisterNUICallback('uiLoaded', function(_, cb)
 
 	if PlayerData.loaded then
 		SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
+		SendNUIMessage({ action = 'setHotbarHud', data = hotbarHudVisible })
 	end
+end)
+
+RegisterNUICallback('setHotbarHud', function(data, cb)
+	if type(data) ~= 'table' or data.visible == nil then return cb(0) end
+	setHotbarHudVisible(data.visible)
+	cb(1)
 end)
 
 RegisterNUICallback('getItemData', function(itemName, cb)

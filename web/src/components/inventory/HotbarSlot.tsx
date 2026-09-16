@@ -2,7 +2,6 @@ import React, { useRef } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { DragSource, InventoryType, SlotWithItem } from '../../typings';
 import { getItemUrl, isSlotWithItem } from '../../helpers';
-import { Items } from '../../store/items';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { closeTooltip, openTooltip } from '../../store/tooltip';
 import WeightBar from '../utils/WeightBar';
@@ -14,9 +13,11 @@ interface Props {
   index: number;
   bind: HotbarBind | null;
   item?: SlotWithItem;
+  /** Bind drag/drop and tooltips only while inventory is open. */
+  interactive?: boolean;
 }
 
-const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
+const HotbarSlot: React.FC<Props> = ({ index, bind, item, interactive = false }) => {
   const dispatch = useAppDispatch();
   const timerRef = useRef<number | null>(null);
   const leftItems = useAppSelector(selectLeftInventory).items;
@@ -35,9 +36,9 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
               image: item?.name ? `url(${getItemUrl(item) || 'none'}` : undefined,
             }
           : null,
-      canDrag: () => !!bind,
+      canDrag: () => interactive && !!bind,
     }),
-    [bind, item, index]
+    [bind, item, index, interactive]
   );
 
   const [{ isOver }, drop] = useDrop<DragSource, void, { isOver: boolean }>(
@@ -47,9 +48,11 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
         isOver: monitor.isOver(),
       }),
       canDrop: (source) =>
-        source.inventory === InventoryType.PLAYER ||
-        (source.inventory === InventoryType.HOTBAR && source.item.slot !== index),
+        interactive &&
+        (source.inventory === InventoryType.PLAYER ||
+          (source.inventory === InventoryType.HOTBAR && source.item.slot !== index)),
       drop: (source) => {
+        if (!interactive) return;
         dispatch(closeTooltip());
 
         if (source.inventory === InventoryType.HOTBAR) {
@@ -67,7 +70,7 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
         });
       },
     }),
-    [index, leftItems]
+    [index, leftItems, interactive]
   );
 
   const connectRef = (element: HTMLDivElement | null) => {
@@ -77,11 +80,12 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
 
   const handleContext = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
-    if (!bind) return;
+    if (!interactive || !bind) return;
     onUnbindHotbar(index);
   };
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!interactive) return;
     dispatch(closeTooltip());
     if (timerRef.current) clearTimeout(timerRef.current);
   };
@@ -107,9 +111,10 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
         <div
           className="item-slot-wrapper"
           onMouseEnter={() => {
+            if (!interactive) return;
             timerRef.current = window.setTimeout(() => {
               dispatch(openTooltip({ item, inventoryType: InventoryType.PLAYER }));
-            }, 500) as unknown as number;
+            }, 150) as unknown as number;
           }}
           onMouseLeave={() => {
             dispatch(closeTooltip());
@@ -121,28 +126,9 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item }) => {
         >
           <div className="hotbar-slot-header-wrapper">
             <div className="inventory-slot-number">{index}</div>
-            <div className="item-slot-info-wrapper">
-              <p>
-                {item.weight > 0
-                  ? item.weight >= 1000
-                    ? `${(item.weight / 1000).toLocaleString('en-us', {
-                        minimumFractionDigits: 2,
-                      })}kg `
-                    : `${item.weight.toLocaleString('en-us', {
-                        minimumFractionDigits: 0,
-                      })}g `
-                  : ''}
-              </p>
-              <p>{item.count ? item.count.toLocaleString('en-us') + `x` : ''}</p>
-            </div>
           </div>
           <div>
             {item.durability !== undefined && <WeightBar percent={item.durability} durability />}
-            <div className="inventory-slot-label-box">
-              <div className="inventory-slot-label-text">
-                {item.metadata?.label ? item.metadata.label : Items[item.name]?.label || item.name}
-              </div>
-            </div>
           </div>
         </div>
       )}

@@ -487,6 +487,8 @@ body.inv-dragging {
   border-color: rgba(0, 0, 0, 0.2);
   border-style: inset;
   border-width: 1px;
+  // Sit above the always-on hotbar (z-index 2)
+  z-index: 50;
   p {
     font-size: 12px;
     font-weight: 400;
@@ -542,6 +544,56 @@ body.inv-dragging {
   left: 0;
   bottom: 2vh;
   z-index: 2;
+  // HUD hotbar must not intercept clicks while the inventory is closed
+  pointer-events: none;
+}
+
+.hotbar-container-interactive {
+  pointer-events: auto;
+}
+
+.hotbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.hotbar-toggle-spacer,
+.hotbar-toggle-btn {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 3.2vh;
+  height: 3.2vh;
+}
+
+.hotbar-toggle-btn {
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 2.5%;
+  background-color: $secondaryColor;
+  color: $textColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  svg {
+    width: 1.8vh;
+    height: 1.8vh;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  &:hover {
+    background-color: $secondaryColorDark;
+    color: #fff;
+  }
+  &:active {
+    transform: none;
+  }
 }
 
 .hotbar-inner {
