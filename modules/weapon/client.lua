@@ -81,7 +81,10 @@ function Weapon.Equip(item, data, noWeaponAnim)
 	SetTimeout(0, function() RefillAmmoInstantly(playerPed) end)
 
 	if item.group == `GROUP_PETROLCAN` or item.group == `GROUP_FIREEXTINGUISHER` then
-		item.metadata.ammo = item.metadata.durability
+		-- Fill level: prefer ammo; fall back to durability only when that system is enabled
+		if shared.durability and item.metadata.durability then
+			item.metadata.ammo = item.metadata.durability
+		end
 		SetPedInfiniteAmmo(playerPed, true, data.hash)
 	end
 

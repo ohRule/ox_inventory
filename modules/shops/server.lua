@@ -307,4 +307,233 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
 	end
 end)
 
+---Purchase every cart line atomically (validate all, then apply all).
+---@param source number
+---@param data { items: { fromSlot: number, count: number }[] }
+lib.callback.register('ox_inventory:buyCart', function(source, data)
+	local playerInv = Inventory(source)
+
+	if not playerInv or not playerInv.currentShop then return false, false, { type = 'error', description = locale('inventory_right_access') } end
+	if type(data) ~= 'table' or type(data.items) ~= 'table' or #data.items < 1 then return false end
+
+	local shopType, shopId = playerInv.currentShop:match('^(.-) (%d-)$')
+
+	if not shopType then shopType = playerInv.currentShop end
+	if shopId then shopId = tonumber(shopId) end
+
+	local shop = shopId and Shops[shopType][shopId] or Shops[shopType]
+	if not shop then return false end
+
+	-- Merge duplicate fromSlot lines from the client
+	local merged = {}
+	for i = 1, #data.items do
+		local entry = data.items[i]
+		local fromSlot = tonumber(entry.fromSlot)
+		local count = math.max(1, math.floor(tonumber(entry.count) or 1))
+
+		if fromSlot then
+			merged[fromSlot] = (merged[fromSlot] or 0) + count
+		end
+	end
+
+	local planned = {}
+	local currencyCosts = {}
+	local totalWeight = playerInv.weight
+	-- Simulated slot occupancy so multiple lines don't claim the same empty slot
+	local reserved = {}
+
+	for fromSlot, count in pairs(merged) do
+		local fromData = shop.items[fromSlot]
+
+		if not fromData then
+			return false, false, { type = 'error', description = locale('item_not_enough', 'item') }
+		end
+
+		if fromData.count then
+			if fromData.count < 1 then
+				return false, false, { type = 'error', description = locale('shop_nostock') }
+			elseif count > fromData.count then
+				count = fromData.count
+			end
+		else
+			count = math.min(count, 99)
+		end
+
+		if fromData.license and server.hasLicense and not server.hasLicense(playerInv, fromData.license) then
+			return false, false, { type = 'error', description = locale('item_unlicensed') }
+		end
+
+		if fromData.grade then
+			local _, rank = server.hasGroup(playerInv, shop.groups)
+			if not isRequiredGrade(fromData.grade, rank) then
+				return false, false, { type = 'error', description = locale('stash_lowgrade') }
+			end
+		end
+
+		local fromItem = Items(fromData.name)
+		if not fromItem then return false end
+
+		local result = fromItem.cb and fromItem.cb('buying', fromItem, playerInv, fromSlot, shop)
+		if result == false then return false end
+
+		local metadata
+		metadata, count = Items.Metadata(playerInv, fromItem, fromData.metadata and table.clone(fromData.metadata) or {}, count)
+
+		local currency = fromData.currency or 'money'
+		local price = count * fromData.price
+		currencyCosts[currency] = (currencyCosts[currency] or 0) + price
+
+		local lineWeight = (fromItem.weight + (metadata?.weight or 0)) * count
+		totalWeight += lineWeight
+
+		if totalWeight > playerInv.maxWeight then
+			return false, false, { type = 'error', description = locale('cannot_carry') }
+		end
+
+		-- Resolve destination slot against live inventory + prior reservations
+		local toSlot
+
+		if fromItem.stack then
+			for slotId = 1, playerInv.slots do
+				local sim = reserved[slotId]
+				local live = playerInv.items[slotId]
+
+				if sim and sim.name == fromItem.name and table.matches(sim.metadata, metadata) then
+					toSlot = slotId
+					break
+				elseif not sim and live and live.name == fromItem.name and fromItem.stack and table.matches(live.metadata, metadata) then
+					toSlot = slotId
+					break
+				end
+			end
+		end
+
+		if not toSlot then
+			for slotId = 1, playerInv.slots do
+				if not reserved[slotId] and not playerInv.items[slotId] then
+					toSlot = slotId
+					break
+				end
+			end
+		end
+
+		if not toSlot then
+			return false, false, { type = 'error', description = locale('cannot_carry') }
+		end
+
+		local existing = reserved[toSlot]
+		if existing then
+			existing.count += count
+		else
+			reserved[toSlot] = {
+				name = fromItem.name,
+				metadata = metadata,
+				count = (playerInv.items[toSlot]?.count or 0) + count,
+			}
+		end
+
+		planned[#planned + 1] = {
+			fromSlot = fromSlot,
+			fromData = fromData,
+			fromItem = fromItem,
+			metadata = metadata,
+			count = count,
+			toSlot = toSlot,
+			price = price,
+			unitPrice = fromData.price,
+			currency = currency,
+		}
+	end
+
+	if #planned < 1 then return false end
+
+	for currency, price in pairs(currencyCosts) do
+		local canAfford = canAffordItem(playerInv, currency, price)
+		if canAfford ~= true then
+			return false, false, canAfford
+		end
+	end
+
+	local playerUpdates = {}
+	local shopUpdates = {}
+	local purchasedLabels = {}
+
+	for i = 1, #planned do
+		local line = planned[i]
+		local fromData = line.fromData
+
+		if fromData.count then
+			fromData.count -= line.count
+		end
+
+		local hooks <close> = TriggerEventHooks('buyItem', {
+			source = source,
+			shopType = shopType,
+			shopId = shopId,
+			toInventory = playerInv.id,
+			toSlot = line.toSlot,
+			fromSlot = fromData,
+			itemName = fromData.name,
+			metadata = line.metadata,
+			count = line.count,
+			price = line.unitPrice,
+			totalPrice = line.price,
+			currency = line.currency,
+		})
+
+		if not hooks.success or not Inventory.SetSlot(playerInv, line.fromItem, line.count, line.metadata, line.toSlot) then
+			-- Roll back stock for this line and any already-applied lines
+			if fromData.count then
+				fromData.count += line.count
+			end
+
+			for j = 1, i - 1 do
+				local prev = planned[j]
+				if prev.fromData.count then
+					prev.fromData.count += prev.count
+				end
+				Inventory.RemoveItem(playerInv, prev.fromItem.name, prev.count, prev.metadata, prev.toSlot)
+			end
+
+			return false
+		end
+
+		playerUpdates[#playerUpdates + 1] = {
+			item = playerInv.items[line.toSlot],
+			inventory = playerInv.id
+		}
+
+		if fromData.count then
+			shopUpdates[#shopUpdates + 1] = {
+				item = shop.items[line.fromSlot],
+				inventory = 'shop'
+			}
+		end
+
+		purchasedLabels[#purchasedLabels + 1] = ('%sx %s'):format(line.count, line.metadata?.label or line.fromItem.label)
+	end
+
+	-- Weight already updated by SetSlot; only charge currencies here
+	for currency, price in pairs(currencyCosts) do
+		removeCurrency(playerInv, currency, price)
+	end
+
+	if server.syncInventory then server.syncInventory(playerInv) end
+
+	local message
+	if #purchasedLabels == 1 then
+		local line = planned[1]
+		message = locale('purchased_for', line.count, line.metadata?.label or line.fromItem.label, (line.currency == 'money' and locale('$') or math.groupdigits(line.price)), (line.currency == 'money' and math.groupdigits(line.price) or ' '..Items(line.currency).label))
+	else
+		local currency, price = next(currencyCosts)
+		message = locale('purchased_cart', #planned, (currency == 'money' and locale('$') or math.groupdigits(price)), (currency == 'money' and math.groupdigits(price) or ' '..(Items(currency) and Items(currency).label or currency)))
+	end
+
+	if server.loglevel > 0 then
+		lib.logger(playerInv.owner, 'buyCart', ('"%s" %s'):format(playerInv.label, message:lower()), ('shop:%s'):format(shop.label))
+	end
+
+	return true, { playerUpdates, shopUpdates, playerInv.weight }, { type = 'success', description = message }
+end)
+
 server.shops = Shops

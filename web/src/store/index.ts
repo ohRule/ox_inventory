@@ -4,6 +4,10 @@ import inventoryReducer from './inventory';
 import tooltipReducer from './tooltip';
 import contextMenuReducer from './contextMenu';
 import hotbarReducer from './hotbar';
+import quickCraftReducer from './quickcraft';
+import navPanelsReducer from './navPanels';
+import uiOptionsReducer from './uiOptions';
+import shopCartReducer from './shopCart';
 
 export const store = configureStore({
   reducer: {
@@ -11,6 +15,10 @@ export const store = configureStore({
     tooltip: tooltipReducer,
     contextMenu: contextMenuReducer,
     hotbar: hotbarReducer,
+    quickcraft: quickCraftReducer,
+    navPanels: navPanelsReducer,
+    uiOptions: uiOptionsReducer,
+    shopCart: shopCartReducer,
   },
 });
 

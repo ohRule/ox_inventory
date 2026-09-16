@@ -155,10 +155,17 @@ lib.callback.register('ox_inventory:craftItem', function(source, id, index, reci
 					local slot = slots[i]
 
 					if needs == 0 then
-						if not slot.metadata.durability or slot.metadata.durability > 0 then
+						-- Tool presence check; durability gate only when enabled
+						if not shared.durability or not slot.metadata.durability or slot.metadata.durability > 0 then
 							break
 						end
 					elseif needs < 1 then
+						-- Fractional ingredient = durability wear on a tool
+						if not shared.durability then
+							tbl[slot.slot] = needs
+							break
+						end
+
 						local item = Items(name)
 						local durability = slot.metadata.durability
 
@@ -224,38 +231,43 @@ lib.callback.register('ox_inventory:craftItem', function(source, id, index, reci
 					if not invSlot then hooks.success = false return end
 
 					if count < 1 then
-						local item = Items(invSlot.name)
-						local durability = invSlot.metadata.durability or 100
-
-						if durability > 100 then
-							local degrade = (invSlot.metadata.degrade or item.degrade) * 60
-							durability -= degrade * count
+						-- Tool wear via durability; skip entirely when durability is disabled
+						if not shared.durability then
+							-- Presence-only tool; leave the item untouched
 						else
-							durability -= count * 100
-						end
+							local item = Items(invSlot.name)
+							local durability = invSlot.metadata.durability or 100
 
-						if invSlot.count > 1 then
-							local emptySlot = Inventory.GetEmptySlot(left)
-
-							if emptySlot then
-								local ok, newItem = Inventory.SetSlot(left, item, 1, table.deepclone(invSlot.metadata), emptySlot)
-
-								if ok and newItem then
-                                    Items.UpdateDurability(left, newItem --[[@as SlotWithItem]], item, durability < 0 and 0 or durability)
-								end
+							if durability > 100 then
+								local degrade = (invSlot.metadata.degrade or item.degrade) * 60
+								durability -= degrade * count
+							else
+								durability -= count * 100
 							end
 
-							invSlot.count -= 1
-                            invSlot.weight = Inventory.SlotWeight(item, invSlot)
+							if invSlot.count > 1 then
+								local emptySlot = Inventory.GetEmptySlot(left)
 
-							left:syncSlotsWithClients({
-								{
-									item = invSlot,
-									inventory = left.id
-								}
-							}, true)
-						else
-                            Items.UpdateDurability(left, invSlot, item, durability < 0 and 0 or durability)
+								if emptySlot then
+									local ok, newItem = Inventory.SetSlot(left, item, 1, table.deepclone(invSlot.metadata), emptySlot)
+
+									if ok and newItem then
+	                                    Items.UpdateDurability(left, newItem --[[@as SlotWithItem]], item, durability < 0 and 0 or durability)
+									end
+								end
+
+								invSlot.count -= 1
+	                            invSlot.weight = Inventory.SlotWeight(item, invSlot)
+
+								left:syncSlotsWithClients({
+									{
+										item = invSlot,
+										inventory = left.id
+									}
+								}, true)
+							else
+	                            Items.UpdateDurability(left, invSlot, item, durability < 0 and 0 or durability)
+							end
 						end
 					else
 						local removed = invSlot and Inventory.RemoveItem(left, invSlot.name, count, nil, slot)

@@ -1,17 +1,35 @@
-$mainColor: #22232c;
-$textColor: #c1c2c5;
+$mainColor: rgba(18, 18, 20, 0.92);
+$textColor: #e8e8e8;
 $mainFont: Roboto;
 
-$secondaryColor: rgba(12, 12, 12, 0.4);
-$secondaryColorHighlight: #33343f;
+// Translucent slot chrome matching the screenshot UI
+$secondaryColor: rgba(20, 20, 22, 0.55);
+$secondaryColorHighlight: rgba(80, 80, 84, 0.75);
 $secondaryColorLight: rgba(0, 0, 0, 0.5);
-$secondaryColorDark: rgba(12, 12, 12, 0.8);
+$secondaryColorDark: rgba(12, 12, 12, 0.85);
+$slotBorder: rgba(255, 255, 255, 0.12);
+$slotRadius: 0.45vh;
 
 $gridCols: 5;
 $gridRows: 5;
-$gridSize: 10.2vh;
-$gridGap: 2px;
-$containerSize: calc(#{$gridRows} * #{$gridSize + 0.22vh} + #{$gridRows} * #{$gridGap});
+$gridSize: 9.6vh;
+$gridGap: 0.55vh;
+$containerSize: calc(#{$gridRows} * #{$gridSize} + #{$gridRows - 1} * #{$gridGap});
+// Shared footprint for left grid + every right panel / menu
+$gridWidth: calc(#{$gridCols} * #{$gridSize} + #{$gridCols - 1} * #{$gridGap});
+$gridHeaderHeight: 1.6vh;
+$gridHeaderGap: calc(#{$gridGap} * 1.5);
+$panelHeight: calc(#{$gridHeaderHeight} + #{$gridHeaderGap} + #{$containerSize});
+
+// Runtime prefs (overridden from Settings / localStorage)
+:root {
+  --inv-highlight: 180, 180, 185;
+  --inv-panel-rgb: 20, 20, 22;
+  --inv-panel-alpha: 0.55;
+  --inv-hotbar-scale: 1;
+  --inv-slot-bg: rgba(var(--inv-panel-rgb), var(--inv-panel-alpha));
+  --inv-highlight-bg: rgba(var(--inv-highlight), 0.55);
+}
 
 body {
   margin: 0;
@@ -137,8 +155,14 @@ body.inv-dragging {
   box-sizing: border-box;
   // Leave room for the separated hotbar at the bottom of the screen
   padding-bottom: calc(#{$gridSize} + 4vh);
+  gap: 2.2vh;
 
-  gap: 40px;
+  // Keep left grid + right panel/menus on the same vertical band
+  > .inventory-grid-wrapper,
+  > .inventory-side-panel,
+  > .wearables-panel {
+    flex-shrink: 0;
+  }
 }
 
 .inventory-control {
@@ -315,27 +339,6 @@ body.inv-dragging {
   background-color: rgba(255, 255, 255, 0.12);
 }
 
-.useful-controls-button {
-  position: absolute !important;
-  bottom: 25px;
-  right: 25px;
-  transition: 200ms !important;
-  border: none;
-  color: white;
-  width: 52px;
-  height: 52px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  fill: white;
-  border-radius: 5% !important;
-  background-color: $secondaryColor !important;
-  &:hover {
-    background-color: $secondaryColorDark !important;
-    cursor: pointer;
-  }
-}
-
 .useful-controls-exit-button {
   position: absolute !important;
   right: 8px;
@@ -344,45 +347,107 @@ body.inv-dragging {
   color: grey !important;
 }
 
-// Dialog is used fro useful controls window
+// Center tab column between left / right panels
+.inventory-nav {
+  display: flex;
+  flex-direction: column;
+  gap: $gridGap;
+  align-self: center;
+}
+
+.inventory-nav-btn {
+  box-sizing: border-box;
+  width: $gridSize * 0.72;
+  height: $gridSize * 0.72;
+  padding: 0;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: $textColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 150ms;
+
+  svg {
+    width: 42%;
+    height: 42%;
+    fill: currentColor;
+  }
+
+  &:hover {
+    background-color: $secondaryColorHighlight;
+  }
+
+  &:active {
+    transform: none;
+  }
+}
+
+.inventory-nav-btn-active {
+  background-color: var(--inv-highlight-bg);
+  color: #fff;
+}
 
 // inventory grids
 .inventory-grid-wrapper {
   display: flex;
   flex-direction: column;
-  gap: calc($gridGap * 2);
+  gap: $gridHeaderGap;
+  width: $gridWidth;
+  height: $panelHeight;
+  box-sizing: border-box;
 }
+
 .inventory-grid-header-wrapper {
   display: flex;
   flex-direction: row;
-  justify-content: space-between;
-  p {
-    font-size: 16px;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6vh;
+  height: $gridHeaderHeight;
+  min-height: $gridHeaderHeight;
+  flex-shrink: 0;
+
+  .inventory-weight-text {
+    font-size: 1.35vh;
+    font-family: $mainFont;
+    color: $textColor;
+    letter-spacing: 0.02em;
+  }
+
+  .inventory-weight-icon {
+    width: 1.4vh;
+    height: 1.4vh;
+    fill: $textColor;
+    opacity: 0.9;
   }
 }
 
 .inventory-grid-container {
   display: grid;
+  width: $gridWidth;
   height: $containerSize;
   grid-template-columns: repeat($gridCols, $gridSize);
-  grid-auto-rows: $gridSize + 0.22vh;
+  grid-auto-rows: $gridSize;
   gap: $gridGap;
   overflow-y: scroll;
+  flex-shrink: 0;
 }
 
 // inventory slots
 .inventory-slot {
-  background-color: $secondaryColor;
+  background-color: var(--inv-slot-bg);
   background-repeat: no-repeat;
   background-position: center;
-  border-radius: 2.5%;
+  border-radius: $slotRadius;
   image-rendering: -webkit-optimize-contrast;
   position: relative;
-  background-size: 7vh;
+  background-size: 6.4vh;
   color: $textColor;
-  border-color: rgba(0, 0, 0, 0.2);
-  border-style: inset;
-  border-width: 1px;
+  border: 1px solid $slotBorder;
+  box-sizing: border-box;
 }
 
 .inventory-slot-label-box {
@@ -408,14 +473,13 @@ body.inv-dragging {
 }
 
 .inventory-slot-number {
-  background-color: white;
-  color: black;
-  height: 12px;
-  border-top-left-radius: 0.25vh;
-  border-bottom-right-radius: 0.25vh;
-  padding: 3px;
-  font-size: 12px;
+  color: $textColor;
+  padding: 0.35vh 0.45vh;
+  font-size: 1.2vh;
   font-family: $mainFont;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.9;
 }
 
 .item-slot-wrapper {
@@ -423,30 +487,43 @@ body.inv-dragging {
   flex-direction: column;
   justify-content: space-between;
   height: 100%;
+  box-sizing: border-box;
+  padding: 0.35vh;
   p {
-    font-size: 12px;
+    font-size: 1.15vh;
+    font-family: $mainFont;
+    text-shadow: 0 0.1vh 0.2vh rgba(0, 0, 0, 0.75);
   }
 }
 
 .item-slot-header-wrapper {
   display: flex;
   flex-direction: row;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .item-hotslot-header-wrapper {
   @extend .item-slot-header-wrapper;
-  justify-content: space-between !important;
+}
+
+.item-slot-count {
+  margin: 0;
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 1.15vh;
+  font-family: $mainFont;
+  color: $textColor;
+  text-shadow: 0 0.1vh 0.2vh rgba(0, 0, 0, 0.75);
 }
 
 .item-slot-info-wrapper {
   display: flex;
   flex-direction: row;
-  align-self: flex-end;
-  padding: 3px;
-  gap: 3px;
+  align-self: flex-start;
+  gap: 0.3vh;
   p {
-    font-size: 12px;
+    font-size: 1.15vh;
   }
 }
 
@@ -557,6 +634,8 @@ body.inv-dragging {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  transform: scale(var(--inv-hotbar-scale));
+  transform-origin: center bottom;
 }
 
 .hotbar-toggle-spacer,
@@ -571,7 +650,7 @@ body.inv-dragging {
   padding: 0;
   border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: 2.5%;
-  background-color: $secondaryColor;
+  background-color: var(--inv-slot-bg);
   color: $textColor;
   display: flex;
   align-items: center;
@@ -605,7 +684,7 @@ body.inv-dragging {
 
 .hotbar-slots {
   display: flex;
-  gap: 2px;
+  gap: $gridGap;
 }
 
 .hotbar-item-slot {
@@ -629,7 +708,7 @@ body.inv-dragging {
 .hotbar-slot-header-wrapper {
   display: flex;
   flex-direction: row;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .hotbar-unbind-zone {
@@ -650,7 +729,7 @@ body.inv-dragging {
   color: $textColor;
   background-color: $secondaryColor;
   border: 1px dashed rgba(255, 255, 255, 0.35);
-  border-radius: 2.5%;
+  border-radius: $slotRadius;
   opacity: 0;
   pointer-events: none;
   transition: opacity 150ms;
@@ -752,4 +831,683 @@ body.inv-dragging {
 .transition-slide-up-exit-active {
   transform: translateY(200px);
   transition: all 200ms;
+}
+
+// Right-side panel shells (quick craft / wearables / settings)
+// Match the left inventory grid footprint exactly
+.inventory-side-panel {
+  box-sizing: border-box;
+  width: $gridWidth;
+  height: $panelHeight;
+  display: flex;
+  flex-direction: column;
+  gap: $gridGap;
+  overflow: hidden;
+}
+
+.inventory-side-panel-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: rgba(232, 232, 232, 0.55);
+  font-family: $mainFont;
+  font-size: 1.4vh;
+  text-align: center;
+  padding: 2vh;
+}
+
+// Shop: catalogue on top, cart + checkout below
+.shop-panel {
+  .shop-header {
+    height: $gridHeaderHeight;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .shop-title {
+    margin: 0;
+    font-family: $mainFont;
+    font-size: 1.5vh;
+    font-weight: 600;
+    color: $textColor;
+  }
+
+  .shop-catalogue {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat($gridCols, $gridSize);
+    grid-auto-rows: $gridSize;
+    gap: $gridGap;
+    overflow-y: auto;
+    overflow-x: hidden;
+    align-content: start;
+
+    &::-webkit-scrollbar {
+      width: 0.3vh;
+    }
+  }
+
+  .shop-slot {
+    box-sizing: border-box;
+  }
+
+  .shop-cart {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8vh;
+    max-height: 42%;
+    min-height: 14vh;
+    border-top: 1px solid $slotBorder;
+    padding-top: 0.8vh;
+  }
+
+  .shop-cart-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45vh;
+
+    &::-webkit-scrollbar {
+      width: 0.3vh;
+    }
+  }
+
+  .shop-cart-empty {
+    color: rgba(232, 232, 232, 0.45);
+    font-family: $mainFont;
+    font-size: 1.2vh;
+    padding: 0.6vh 0.2vh;
+  }
+
+  .shop-cart-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6vh;
+    font-family: $mainFont;
+    font-size: 1.25vh;
+    color: $textColor;
+  }
+
+  .shop-cart-qty {
+    display: flex;
+    align-items: center;
+    gap: 0.35vh;
+    flex-shrink: 0;
+  }
+
+  .shop-cart-qty-btn {
+    width: 2.2vh;
+    height: 2.2vh;
+    padding: 0;
+    border: 1px solid $slotBorder;
+    border-radius: $slotRadius;
+    background: var(--inv-slot-bg);
+    color: $textColor;
+    font-size: 1.3vh;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover:not(:disabled) {
+      background-color: $secondaryColorHighlight;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
+  .shop-cart-qty-value {
+    min-width: 1.6vh;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .shop-cart-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shop-cart-line-price {
+    flex-shrink: 0;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3vh;
+  }
+
+  .shop-cart-currency-icon {
+    width: 1.4vh;
+    height: auto;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  .shop-cart-remove {
+    flex-shrink: 0;
+    width: 2vh;
+    height: 2vh;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: rgba(232, 232, 232, 0.55);
+    font-size: 1.6vh;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover {
+      color: $textColor;
+    }
+  }
+
+  .shop-cart-footer {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7vh;
+    border-top: 1px solid $slotBorder;
+    padding-top: 0.7vh;
+  }
+
+  .shop-cart-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: $mainFont;
+    font-size: 1.35vh;
+    color: $textColor;
+  }
+
+  .shop-cart-total-value {
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3vh;
+  }
+
+  .shop-checkout-btn {
+    width: 100%;
+    border: none;
+    border-radius: $slotRadius;
+    padding: 1.1vh 1.2vh;
+    background: #2ecc71;
+    color: #fff;
+    font-family: $mainFont;
+    font-size: 1.45vh;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 150ms ease;
+
+    &:hover:not(:disabled) {
+      background: #27ae60;
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+  }
+}
+
+
+// Wearables: slot column + transparent preview / storage
+.wearables-panel {
+  --wearable-slot-size: #{$gridSize};
+  box-sizing: border-box;
+  width: $gridWidth;
+  height: $panelHeight;
+  // Align equipment column with the 5 inventory rows (below weight header)
+  padding-top: calc(#{$gridHeaderHeight} + #{$gridHeaderGap});
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: $gridGap;
+  overflow: hidden;
+}
+
+.wearables-slots {
+  display: flex;
+  flex-direction: column;
+  gap: $gridGap;
+  width: $gridSize;
+  height: $containerSize;
+  flex-shrink: 0;
+}
+
+.wearables-detail {
+  flex: 1;
+  min-width: 0;
+  width: calc(#{$gridWidth} - #{$gridSize} - #{$gridGap});
+  height: $containerSize;
+  display: flex;
+  flex-direction: column;
+  gap: $gridGap;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wearables-slot {
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: $textColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms;
+
+  .wearables-slot-icon {
+    width: 48%;
+    height: 48%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
+
+    svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
+    }
+  }
+
+  &:hover {
+    background-color: $secondaryColorHighlight;
+  }
+
+  &:active {
+    transform: none;
+  }
+}
+
+.wearables-slot-selected {
+  background-color: var(--inv-highlight-bg);
+  border-color: rgba(var(--inv-highlight), 0.45);
+  color: #fff;
+
+  .wearables-slot-icon {
+    opacity: 1;
+  }
+}
+
+.wearables-slot-equipped:not(.wearables-slot-selected) {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.wearables-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  // Keep this transparent so the scripted ped cam shows through
+  background: transparent;
+  pointer-events: none;
+}
+
+.wearables-preview-hint {
+  margin-bottom: 1vh;
+  padding: 0.5vh 1.2vh;
+  border-radius: $slotRadius;
+  background-color: rgba(12, 12, 14, 0.45);
+  color: rgba(232, 232, 232, 0.7);
+  font-family: $mainFont;
+  font-size: 1.25vh;
+}
+
+.wearables-storage {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5vh;
+  height: 100%;
+}
+
+.wearables-storage-label {
+  margin: 0;
+  font-family: $mainFont;
+  font-size: 1.15vh;
+  color: rgba(232, 232, 232, 0.7);
+}
+
+.wearables-storage-grid {
+  display: grid;
+  gap: $gridGap;
+  justify-content: start;
+  align-content: start;
+  flex: 1;
+  min-height: 0;
+}
+
+.wearables-storage-slot {
+  box-sizing: border-box;
+  width: $gridSize;
+  height: $gridSize;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+}
+
+.wearables-storage-locked {
+  .wearables-storage-slot {
+    opacity: 0.4;
+  }
+
+  .wearables-storage-label {
+    color: rgba(232, 232, 232, 0.5);
+  }
+}
+
+// Quick craft list panel
+.quickcraft-categories {
+  display: flex;
+  gap: $gridGap;
+}
+
+.quickcraft-category-btn {
+  box-sizing: border-box;
+  width: calc((100% - #{$gridGap} * 4) / 5);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: $textColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  svg {
+    width: 40%;
+    height: 40%;
+    fill: currentColor;
+  }
+
+  &:hover {
+    background-color: $secondaryColorHighlight;
+  }
+
+  &:active {
+    transform: none;
+  }
+}
+
+.quickcraft-category-btn-active {
+  background-color: var(--inv-highlight-bg);
+  color: #fff;
+}
+
+.quickcraft-search {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.8vh;
+  padding: 0.7vh 1vh;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: $textColor;
+
+  svg {
+    width: 1.4vh;
+    height: 1.4vh;
+    flex-shrink: 0;
+    fill: currentColor;
+    opacity: 0.7;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: $textColor;
+    font-family: $mainFont;
+    font-size: 1.25vh;
+
+    &::placeholder {
+      color: rgba(232, 232, 232, 0.45);
+    }
+  }
+}
+
+.quickcraft-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: $gridGap;
+}
+
+.quickcraft-row {
+  box-sizing: border-box;
+  min-height: 5.2vh;
+  padding: 0.7vh 0.9vh;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: $textColor;
+  display: flex;
+  align-items: center;
+  gap: 0.8vh;
+  cursor: pointer;
+  font-family: $mainFont;
+
+  &:hover:not(.quickcraft-row-disabled) {
+    background-color: $secondaryColorHighlight;
+  }
+
+  &:active {
+    transform: none;
+  }
+}
+
+.quickcraft-row-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.quickcraft-fav {
+  flex-shrink: 0;
+  width: 1.6vh;
+  height: 1.6vh;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(232, 232, 232, 0.35);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+  }
+
+  &:active {
+    transform: none;
+  }
+}
+
+.quickcraft-fav-on {
+  color: #f5c518;
+}
+
+.quickcraft-row-name {
+  flex: 0 0 9vh;
+  font-size: 1.25vh;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quickcraft-ingredients {
+  display: flex;
+  align-items: center;
+  gap: 0.6vh;
+  flex: 1;
+  min-width: 0;
+}
+
+.quickcraft-ingredient {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15vh;
+
+  img {
+    width: 2.4vh;
+    height: 2.4vh;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  span {
+    font-size: 1vh;
+    opacity: 0.85;
+  }
+}
+
+.quickcraft-arrow {
+  flex-shrink: 0;
+  opacity: 0.55;
+  font-size: 1.4vh;
+  padding: 0 0.3vh;
+}
+
+.quickcraft-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15vh;
+  flex-shrink: 0;
+
+  img {
+    width: 2.8vh;
+    height: 2.8vh;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  span {
+    font-size: 1vh;
+  }
+}
+
+.quickcraft-duration {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 1.15vh;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.quickcraft-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(232, 232, 232, 0.45);
+  font-family: $mainFont;
+  font-size: 1.3vh;
+}
+
+// Settings panel
+.settings-panel {
+  justify-content: flex-start;
+  gap: 1.2vh;
+  padding: 0.2vh 0;
+  overflow-y: auto;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7vh;
+}
+
+.settings-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1vh;
+}
+
+.settings-label {
+  margin: 0;
+  font-family: $mainFont;
+  font-size: 1.3vh;
+  color: $textColor;
+}
+
+.settings-value {
+  font-family: $mainFont;
+  font-size: 1.2vh;
+  color: rgba(232, 232, 232, 0.65);
+}
+
+.settings-color-picker {
+  // Keep Mantine picker readable on the translucent inventory chrome
+  --mantine-color-body: rgba(18, 18, 20, 0.92);
+}
+
+.settings-hex-mantine {
+  input {
+    background-color: var(--inv-slot-bg);
+    border-color: $slotBorder;
+    color: $textColor;
+    font-family: $mainFont;
+  }
+}
+
+.settings-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: rgb(var(--inv-highlight));
+  cursor: pointer;
+}
+
+.settings-reset {
+  margin-top: auto;
+  padding: 1vh 1.2vh;
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+  background-color: var(--inv-slot-bg);
+  color: $textColor;
+  font-family: $mainFont;
+  font-size: 1.25vh;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $secondaryColorHighlight;
+  }
+
+  &:active {
+    transform: none;
+  }
 }

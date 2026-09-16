@@ -120,12 +120,15 @@ local function closeTrunk()
 end
 
 local CraftingBenches = require 'modules.crafting.client'
+local QuickCraft = require 'modules.quickcraft.client'
+local Wearables = require 'modules.wearables.client'
 local Vehicles = lib.load('data.vehicles')
 local Inventory = require 'modules.inventory.client'
 
 -- Hotbar keys bind to items without moving them out of the inventory
 local HOTBAR_SIZE = 6
 local hotbarBinds = {}
+local hotbarReady = false
 
 local function getHotbarPayload()
 	local payload = {}
@@ -137,17 +140,11 @@ local function getHotbarPayload()
 	return payload
 end
 
-local function saveHotbarBinds()
-	SetResourceKvp('ox_inventory:hotbarBinds', json.encode(getHotbarPayload()))
-end
-
-local function loadHotbarBinds()
+local function applyHotbarBinds(decoded)
 	hotbarBinds = {}
-	local raw = GetResourceKvpString('ox_inventory:hotbarBinds')
-	if not raw then return end
+	if type(decoded) ~= 'table' then return false end
 
-	local decoded = json.decode(raw)
-	if type(decoded) ~= 'table' then return end
+	local hasBind = false
 
 	for i = 1, HOTBAR_SIZE do
 		local bind = decoded[i] or decoded[tostring(i)]
@@ -157,7 +154,50 @@ local function loadHotbarBinds()
 				name = bind.name,
 				serial = bind.serial
 			}
+			hasBind = true
 		end
+	end
+
+	return hasBind
+end
+
+-- Persist to the character's DB row (server) — source of truth across PCs / characters
+local function saveHotbarBinds()
+	if not hotbarReady then return end
+	TriggerServerEvent('ox_inventory:saveHotbar', getHotbarPayload())
+end
+
+-- Apply server binds; one-time migrate leftover client KVP if this character has none yet
+local function loadHotbarFromServer(serverBinds)
+	-- nil = no DB row yet; table (even empty) = character already has saved hotbar data
+	if serverBinds ~= nil then
+		applyHotbarBinds(serverBinds)
+		DeleteResourceKvp('ox_inventory:hotbarBinds')
+	else
+		local raw = GetResourceKvpString('ox_inventory:hotbarBinds')
+		if raw then
+			local decoded = json.decode(raw)
+			if applyHotbarBinds(decoded) then
+				TriggerServerEvent('ox_inventory:migrateHotbar', getHotbarPayload())
+			end
+			DeleteResourceKvp('ox_inventory:hotbarBinds')
+		else
+			hotbarBinds = {}
+		end
+	end
+
+	hotbarReady = true
+	SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
+end
+
+-- Clear binds on logout so the next character doesn't briefly show the previous set
+do
+	local _onLogout = client.onLogout
+	function client.onLogout(...)
+		hotbarBinds = {}
+		hotbarReady = false
+		SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
+		return _onLogout(...)
 	end
 end
 
@@ -191,8 +231,6 @@ local function resolveHotbarSlot(index)
 		end
 	end
 end
-
-loadHotbarBinds()
 
 ---@param inv string?
 ---@param data any?
@@ -568,10 +606,10 @@ local function useSlot(slot, noAnim)
 		local consume = data.consume --[[@as number?]]
 		local label = item.metadata.label or item.label --[[@as string]]
 
-		-- Naive durability check to get an early exit
+		-- Naive durability check to get an early exit (skipped when durability system is off)
 		-- People often don't call the 'useItem' export and then complain about "broken" items being usable
 		-- This won't work with degradation since we need access to os.time on the server
-		if durability and durability <= 100 and consume then
+		if shared.durability and durability and durability <= 100 and consume then
 			if durability <= 0 then
 				return lib.notify({ type = 'error', description = locale('no_durability', label) })
 			elseif consume ~= 0 and consume < 1 and durability < consume * 100 then
@@ -629,7 +667,7 @@ local function useSlot(slot, noAnim)
 			end, noAnim)
 		elseif currentWeapon then
 			if data.ammo then
-				if EnableWeaponWheel or currentWeapon.metadata.durability <= 0 then return end
+				if EnableWeaponWheel or (shared.durability and currentWeapon.metadata.durability <= 0) then return end
 
 				local clipSize = GetMaxAmmoInClip(playerPed, currentWeapon.hash, true)
 				local currentAmmo = GetAmmoInPedWeapon(playerPed, currentWeapon.hash)
@@ -921,7 +959,7 @@ local function registerCommands()
 			if not currentWeapon or EnableWeaponWheel or not canUseItem(true) then return end
 
 			if currentWeapon.ammo then
-				if currentWeapon.metadata.durability > 0 then
+				if not shared.durability or currentWeapon.metadata.durability > 0 then
 					local slotId = Inventory.GetSlotIdWithItem(currentWeapon.ammo, { type = currentWeapon.metadata.specialAmmo }, false)
 
 					if slotId then
@@ -967,6 +1005,7 @@ function client.closeInventory()
 		invOpen = nil
 		SetNuiFocus(false, false)
 		SetNuiFocusKeepInput(false)
+		Wearables.Stop()
 		Utils.blurOut()
 		closeTrunk()
 		SendNUIMessage({ action = 'closeInventory' })
@@ -1271,7 +1310,7 @@ lib.onCache('vehicle', function()
 	end
 end)
 
-RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inventory, weight, player)
+RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inventory, weight, player, hotbar)
 	if source == '' then return end
 
     ---@class PlayerData
@@ -1282,6 +1321,10 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 	PlayerData.id = cache.playerId
 	PlayerData.source = cache.serverId
     PlayerData.maxWeight = shared.playerweight
+
+	-- Load this character's hotbar from the server (migrate legacy KVP once if needed)
+	hotbarReady = false
+	loadHotbarFromServer(hotbar)
 
 	setmetatable(PlayerData, {
 		__index = function(self, key)
@@ -1420,7 +1463,16 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			},
 			imagepath = client.imagepath,
 			hotbarBinds = getHotbarPayload(),
-			hotbarHud = hotbarHudVisible
+			hotbarHud = hotbarHudVisible,
+			quickCraft = QuickCraft.GetRecipes(),
+			navPanels = {
+				craft = client.navcraft,
+				wearables = client.navwearables,
+				settings = client.navsettings,
+			},
+			uiOptions = {
+				showDurability = shared.durability,
+			},
 		}
 	})
 
@@ -1562,7 +1614,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 				DisableControlAction(0, 80, true)
 				DisableControlAction(0, 140, true)
 
-				if currentWeapon.metadata.durability <= 0 or not currentWeapon.timer then
+				if (shared.durability and currentWeapon.metadata.durability <= 0) or not currentWeapon.timer then
 					DisablePlayerFiring(playerId, true)
 				elseif client.aimedfiring and not currentWeapon.melee and currentWeapon.group ~= `GROUP_PETROLCAN` and not IsPlayerFreeAiming(playerId) then
 					DisablePlayerFiring(playerId, true)
@@ -1584,18 +1636,22 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 							end
 						end
 
-					elseif currentWeapon.metadata.durability then
+					elseif shared.durability and currentWeapon.metadata.durability then
 						TriggerServerEvent('ox_inventory:updateWeapon', 'melee', currentWeapon.melee)
 						currentWeapon.melee = 0
 					end
 				elseif weaponAmmo then
 					if IsPedShooting(playerPed) then
 						local currentAmmo
+						-- Item durability field is also the per-shot drain rate for cans/weapons
 						local durabilityDrain = Items[currentWeapon.name].durability
 
 						if currentWeapon.group == `GROUP_PETROLCAN` or currentWeapon.group == `GROUP_FIREEXTINGUISHER` then
 							currentAmmo = weaponAmmo - durabilityDrain < 0 and 0 or weaponAmmo - durabilityDrain
-							currentWeapon.metadata.durability = currentAmmo
+							-- Fuel level lives in ammo; only mirror to durability when that system is on
+							if shared.durability then
+								currentWeapon.metadata.durability = currentAmmo
+							end
 							currentWeapon.metadata.ammo = (weaponAmmo < currentAmmo) and 0 or currentAmmo
 
 							if currentAmmo <= 0 then
@@ -1607,7 +1663,9 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 							if currentAmmo < weaponAmmo then
 								currentAmmo = (weaponAmmo < currentAmmo) and 0 or currentAmmo
 								currentWeapon.metadata.ammo = currentAmmo
-								currentWeapon.metadata.durability = currentWeapon.metadata.durability - (durabilityDrain * math.abs((weaponAmmo or 0.1) - currentAmmo))
+								if shared.durability then
+									currentWeapon.metadata.durability = currentWeapon.metadata.durability - (durabilityDrain * math.abs((weaponAmmo or 0.1) - currentAmmo))
+								end
 							end
 						end
 
@@ -2033,6 +2091,33 @@ RegisterNUICallback('buyItem', function(data, cb)
 	cb(response)
 end)
 
+-- Atomic multi-item shop checkout (cart)
+RegisterNUICallback('buyCart', function(data, cb)
+	---@type boolean, false | { [1]: table, [2]: table, [3]: number }, NotifyProps
+	local response, payload, message = lib.callback.await('ox_inventory:buyCart', 100, data)
+
+	if payload then
+		local playerUpdates, shopUpdates, weight = payload[1], payload[2], payload[3]
+
+		if playerUpdates and #playerUpdates > 0 then
+			updateInventory(playerUpdates, weight)
+		end
+
+		if shopUpdates and #shopUpdates > 0 then
+			SendNUIMessage({
+				action = 'refreshSlots',
+				data = { items = shopUpdates }
+			})
+		end
+	end
+
+	if message then
+		lib.notify(message)
+	end
+
+	cb(response or false)
+end)
+
 RegisterNUICallback('craftItem', function(data, cb)
 	cb(true)
 
@@ -2049,6 +2134,23 @@ RegisterNUICallback('craftItem', function(data, cb)
 
 	if currentInventory.type ~= 'crafting' then
 		client.openInventory('crafting', { id = id, index = index })
+	end
+end)
+
+-- Quick craft from the inventory panel (independent of crafting benches)
+RegisterNUICallback('quickCraftItem', function(data, cb)
+	cb(true)
+
+	local recipeId = data.recipeId
+	if not recipeId then return end
+
+	for _ = 1, data.count or 1 do
+		local success, response = lib.callback.await('ox_inventory:quickCraftItem', false, recipeId)
+
+		if not success then
+			if response then lib.notify({ type = 'error', description = locale(response or 'cannot_perform') }) end
+			break
+		end
 	end
 end)
 

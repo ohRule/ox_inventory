@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDragLayer, useDrop } from 'react-dnd';
-import { HOTBAR_SLOTS, resolveHotbarItem } from '../../helpers';
+import { HOTBAR_SLOTS, hotbarPlaceholder, resolveHotbarItem } from '../../helpers';
 import useNuiEvent from '../../hooks/useNuiEvent';
 import { useAppSelector } from '../../store';
 import { selectIsBusy, selectLeftInventory } from '../../store/inventory';
@@ -124,7 +124,10 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
               {Array.from({ length: HOTBAR_SLOTS }, (_, i) => {
                 const index = i + 1;
                 const bind = binds[i] ?? null;
-                const item = resolveHotbarItem(bind, items);
+                const liveItem = resolveHotbarItem(bind, items);
+                const missing = !!bind && !liveItem;
+                // Keep showing the bound item icon even when it's not in the inventory
+                const item = liveItem ?? (missing ? hotbarPlaceholder(bind) : undefined);
 
                 return (
                   <HotbarSlot
@@ -132,6 +135,7 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
                     index={index}
                     bind={bind}
                     item={item}
+                    missing={missing}
                     interactive={inventoryOpen}
                   />
                 );

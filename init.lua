@@ -19,7 +19,9 @@ shared = {
     playerweight = GetConvarInt('inventory:weight', 30000),
     target = GetConvarBool('inventory:target', false),
     police = json.decode(GetConvar('inventory:police', '["police", "sheriff"]')),
-    networkdumpsters = GetConvarBool('inventory:networkdumpsters', false)
+    networkdumpsters = GetConvarBool('inventory:networkdumpsters', false),
+    -- Full durability system (decay, weapon wear, use/craft checks, UI)
+    durability = GetConvarBool('inventory:durability', true),
 }
 
 shared.dropslots = GetConvarInt('inventory:dropslots', shared.playerslots)
@@ -102,7 +104,11 @@ else
         suppresspickups = GetConvarBool('inventory:suppresspickups', true),
         disableweapons = GetConvarBool('inventory:disableweapons', false),
         disablesetupnotification = GetConvarBool('inventory:disablesetupnotification', false),
-        enablestealcommand = GetConvarBool('inventory:enablestealcommand', true)
+        enablestealcommand = GetConvarBool('inventory:enablestealcommand', true),
+        -- Middle nav panels (off by default; enable per-server when ready)
+        navcraft = GetConvarBool('inventory:navcraft', false),
+        navwearables = GetConvarBool('inventory:navwearables', false),
+        navsettings = GetConvarBool('inventory:navsettings', false),
     }
 
     local ignoreweapons = table.create(0, (client.ignoreweapons and #client.ignoreweapons or 0) + 3)

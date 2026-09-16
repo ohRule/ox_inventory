@@ -8,19 +8,25 @@ import WeightBar from '../utils/WeightBar';
 import { onBindHotbar, onSwapHotbar, onUnbindHotbar } from '../../dnd/onHotbar';
 import { HotbarBind } from '../../store/hotbar';
 import { selectLeftInventory } from '../../store/inventory';
+import { selectShowDurability } from '../../store/uiOptions';
 
 interface Props {
   index: number;
   bind: HotbarBind | null;
   item?: SlotWithItem;
+  /** Bound item is not currently in the inventory */
+  missing?: boolean;
   /** Bind drag/drop and tooltips only while inventory is open. */
   interactive?: boolean;
 }
 
-const HotbarSlot: React.FC<Props> = ({ index, bind, item, interactive = false }) => {
+const HotbarSlot: React.FC<Props> = ({ index, bind, item, missing = false, interactive = false }) => {
   const dispatch = useAppDispatch();
   const timerRef = useRef<number | null>(null);
   const leftItems = useAppSelector(selectLeftInventory).items;
+  const showDurability = useAppSelector(selectShowDurability);
+  const displayItem = item;
+  const iconUrl = displayItem?.name ? getItemUrl(displayItem) : bind?.name ? getItemUrl(bind.name) : undefined;
 
   const [{ isDragging }, drag] = useDrag<DragSource, void, { isDragging: boolean }>(
     () => ({
@@ -33,12 +39,12 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, interactive = false })
           ? {
               inventory: InventoryType.HOTBAR,
               item: { name: bind.name, slot: index },
-              image: item?.name ? `url(${getItemUrl(item) || 'none'}` : undefined,
+              image: iconUrl ? `url(${iconUrl}` : undefined,
             }
           : null,
       canDrag: () => interactive && !!bind,
     }),
-    [bind, item, index, interactive]
+    [bind, iconUrl, index, interactive]
   );
 
   const [{ isOver }, drop] = useDrop<DragSource, void, { isOver: boolean }>(
@@ -84,7 +90,7 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, interactive = false })
     onUnbindHotbar(index);
   };
 
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleClick = () => {
     if (!interactive) return;
     dispatch(closeTooltip());
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -95,25 +101,25 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, interactive = false })
       ref={connectRef}
       onContextMenu={handleContext}
       onClick={handleClick}
-      className="hotbar-item-slot"
+      className={`hotbar-item-slot${missing ? ' hotbar-item-slot-missing' : ''}`}
       style={{
         opacity: isDragging ? 0.4 : 1.0,
-        backgroundImage: `url(${item?.name ? getItemUrl(item) : 'none'}`,
-        border: isOver ? '1px dashed rgba(255,255,255,0.4)' : '',
+        backgroundImage: `url(${iconUrl || 'none'}`,
+        border: isOver ? '1px dashed rgba(var(--inv-highlight), 0.75)' : undefined,
       }}
     >
-      {!item && (
+      {!displayItem && !bind && (
         <div className="item-hotslot-header-wrapper">
           <div className="inventory-slot-number">{index}</div>
         </div>
       )}
-      {item && isSlotWithItem(item) && (
+      {(displayItem || bind) && (
         <div
           className="item-slot-wrapper"
           onMouseEnter={() => {
-            if (!interactive) return;
+            if (!interactive || !displayItem || missing) return;
             timerRef.current = window.setTimeout(() => {
-              dispatch(openTooltip({ item, inventoryType: InventoryType.PLAYER }));
+              dispatch(openTooltip({ item: displayItem, inventoryType: InventoryType.PLAYER }));
             }, 150) as unknown as number;
           }}
           onMouseLeave={() => {
@@ -128,7 +134,9 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, interactive = false })
             <div className="inventory-slot-number">{index}</div>
           </div>
           <div>
-            {item.durability !== undefined && <WeightBar percent={item.durability} durability />}
+            {showDurability && !missing && displayItem && isSlotWithItem(displayItem) && displayItem.durability !== undefined && (
+              <WeightBar percent={displayItem.durability} durability />
+            )}
           </div>
         </div>
       )}

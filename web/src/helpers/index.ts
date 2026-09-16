@@ -54,6 +54,7 @@ export const canCraftItem = (item: Slot, inventoryType: string) => {
   if (!isSlotWithItem(item) || inventoryType !== 'crafting') return true;
   if (!item.ingredients) return true;
   const leftInventory = store.getState().inventory.leftInventory;
+  const showDurability = store.getState().uiOptions.showDurability;
   const ingredientItems = Object.entries(item.ingredients);
 
   const remainingItems = ingredientItems.filter((ingredient) => {
@@ -67,6 +68,8 @@ export const canCraftItem = (item: Slot, inventoryType: string) => {
     const hasItem = leftInventory.items.find((playerItem) => {
       if (isSlotWithItem(playerItem) && playerItem.name === item) {
         if (count < 1) {
+          // Tool wear via durability; presence-only when durability is disabled
+          if (!showDurability) return true;
           if (playerItem.metadata?.durability >= count * 100) return true;
 
           return false;
@@ -98,6 +101,21 @@ export const resolveHotbarItem = (
   if (bySlot && matches(bySlot)) return bySlot;
 
   return items.find(matches);
+};
+
+/** Display stub when a bind exists but the item isn't in the inventory anymore. */
+export const hotbarPlaceholder = (
+  bind: { slot?: number; name: string; serial?: string } | null | undefined
+): SlotWithItem | undefined => {
+  if (!bind?.name) return;
+
+  return {
+    slot: bind.slot || 0,
+    name: bind.name,
+    count: 0,
+    weight: 0,
+    metadata: bind.serial ? { serial: bind.serial } : undefined,
+  };
 };
 
 export const canStack = (sourceSlot: Slot, targetSlot: Slot) =>

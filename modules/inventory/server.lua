@@ -1024,6 +1024,7 @@ exports('GetSlot', Inventory.GetSlot)
 ---@param slotId number
 ---@param durability number
 function Inventory.SetDurability(inv, slotId, durability)
+	if not shared.durability then return end
 	if not inv or type(slotId) ~= 'number' or type(durability) ~= 'number' then return end
 
 	inv = Inventory(inv) --[[@as OxInventory]]
@@ -2631,7 +2632,7 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 				value = 0
 			end
 
-			if action == 'load' and weapon.metadata.durability > 0 then
+			if action == 'load' and (not shared.durability or (weapon.metadata.durability or 0) > 0) then
 				local ammo = Items(weapon.name).ammoname
 				local diff = value - (weapon.metadata.ammo or 0)
 
@@ -2659,19 +2660,24 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 			elseif action == 'ammo' then
 				if item.hash == `WEAPON_FIREEXTINGUISHER` or item.hash == `WEAPON_PETROLCAN` or item.hash == `WEAPON_HAZARDCAN` or item.hash == `WEAPON_FERTILIZERCAN` then
                     local safeValue = math.max(0, math.min(100, math.floor(value)))
-                    weapon.metadata.durability = safeValue
+                    -- Ammo is fuel fill; durability mirror only when enabled
+                    if shared.durability then
+                        weapon.metadata.durability = safeValue
+                    end
                     weapon.metadata.ammo = safeValue
 				elseif value < weapon.metadata.ammo then
-					local durability = Items(weapon.name).durability * math.abs((weapon.metadata.ammo or 0.1) - value)
+					if shared.durability then
+						local durability = Items(weapon.name).durability * math.abs((weapon.metadata.ammo or 0.1) - value)
+						weapon.metadata.durability = weapon.metadata.durability - durability
+					end
 					weapon.metadata.ammo = value
-					weapon.metadata.durability = weapon.metadata.durability - durability
 					weapon.weight = Inventory.SlotWeight(item, weapon)
 				end
-			elseif action == 'melee' then
+			elseif action == 'melee' and shared.durability then
 				weapon.metadata.durability = weapon.metadata.durability - ((Items(weapon.name).durability or 1) * value)
 			end
 
-            if (weapon.metadata.durability or 0) < 0 then
+            if shared.durability and (weapon.metadata.durability or 0) < 0 then
                 weapon.metadata.durability = 0
             end
 

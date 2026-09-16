@@ -116,7 +116,8 @@ Citizen.CreateThreadNow(function()
     local clearStashes = GetConvar('inventory:clearstashes', '6 MONTH')
 
     if clearStashes ~= '' then
-        pcall(MySQL.query.await, ('DELETE FROM ox_inventory WHERE lastupdated < (NOW() - INTERVAL %s)'):format(clearStashes))
+        -- Keep per-character hotbar rows; only purge stale stashes
+        pcall(MySQL.query.await, ('DELETE FROM ox_inventory WHERE name <> \'hotbar\' AND lastupdated < (NOW() - INTERVAL %s)'):format(clearStashes))
     end
 end)
 
@@ -129,6 +130,22 @@ end
 
 function db.savePlayer(owner, inventory)
     return MySQL.prepare.await(Query.UPDATE_PLAYER, { inventory, owner })
+end
+
+-- Per-character hotbar binds (stored as a named row in ox_inventory)
+local HOTBAR_NAME = 'hotbar'
+
+function db.loadHotbar(owner)
+    local data = MySQL.prepare.await(Query.SELECT_STASH, { owner and tostring(owner) or '', HOTBAR_NAME }) --[[@as string?]]
+    return data and json.decode(data) or nil
+end
+
+function db.saveHotbar(owner, binds)
+    return MySQL.prepare.await(Query.UPSERT_STASH, {
+        json.encode(binds),
+        owner and tostring(owner) or '',
+        HOTBAR_NAME,
+    })
 end
 
 function db.saveStash(owner, dbId, inventory)

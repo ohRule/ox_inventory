@@ -4,6 +4,7 @@ require 'modules.bridge.server'
 require 'modules.crafting.server'
 require 'modules.shops.server'
 require 'modules.pefcl.server'
+require 'modules.quickcraft.server'
 
 if GetConvar('inventory:versioncheck', 'true') == 'true' then
     lib.versionCheck('overextended/ox_inventory')
@@ -73,13 +74,56 @@ function server.setPlayerInventory(player, data)
         until inv.player.ped ~= 0
 
         if server.syncInventory then server.syncInventory(inv) end
+
+        -- Per-character hotbar binds from DB
+        local hotbar = db.loadHotbar(player.identifier)
+
         TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inventory, totalWeight,
-            inv.player)
+            inv.player, hotbar)
     end
 end
 
 exports('setPlayerInventory', server.setPlayerInventory)
 AddEventHandler('ox_inventory:setPlayerInventory', server.setPlayerInventory)
+
+---Validate and persist hotbar binds for the player's character
+---@param source number
+---@param binds any
+---@return boolean
+local function savePlayerHotbar(source, binds)
+    local inv = Inventory(source)
+    if not inv?.player or not inv.owner then return false end
+    if type(binds) ~= 'table' then return false end
+
+    local cleaned = {}
+    for i = 1, 6 do
+        local bind = binds[i] or binds[tostring(i)]
+        if type(bind) == 'table' and type(bind.name) == 'string' then
+            cleaned[i] = {
+                slot = tonumber(bind.slot),
+                name = bind.name,
+                serial = type(bind.serial) == 'string' and bind.serial or nil,
+            }
+        else
+            cleaned[i] = false
+        end
+    end
+
+    db.saveHotbar(inv.owner, cleaned)
+    return true
+end
+
+RegisterNetEvent('ox_inventory:saveHotbar', function(binds)
+    savePlayerHotbar(source, binds)
+end)
+
+-- One-time KVP → DB migration: only accepted when this character has no saved hotbar yet
+RegisterNetEvent('ox_inventory:migrateHotbar', function(binds)
+    local inv = Inventory(source)
+    if not inv?.player or not inv.owner then return end
+    if db.loadHotbar(inv.owner) then return end
+    savePlayerHotbar(source, binds)
+end)
 
 local registeredDumpsters = {}
 
@@ -427,7 +471,8 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
         local consume = item.consume
         local label = data.metadata.label or item.label
 
-        if durability and consume then
+        -- Durability checks / empty-slot split only when the system is enabled
+        if shared.durability and durability and consume then
             if durability > 100 then
                 local ostime = os.time()
 
@@ -471,8 +516,10 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
             if item.ammo then
                 if inventory.weapon then
                     local weapon = inventory.items[inventory.weapon]
+                    -- When durability is off, any equipped weapon can accept ammo
+                    local canReload = weapon and (not shared.durability or (weapon.metadata.durability or 0) > 0)
 
-                    if weapon and weapon?.metadata.durability > 0 then
+                    if canReload then
                         consume = nil
                     end
                 else
@@ -531,7 +578,8 @@ lib.callback.register('ox_inventory:useItem', function(source, itemName, slot, m
 
                 if not data then hooks.success = false return end
 
-                durability = consume ~= 0 and consume < 1 and data.metadata.durability --[[@as number | false]]
+                -- Partial consume via durability (multi-use items); skipped when durability is disabled
+                durability = shared.durability and consume ~= 0 and consume < 1 and data.metadata.durability --[[@as number | false]]
 
                 if durability then
                     if durability > 100 then

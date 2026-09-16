@@ -7,12 +7,23 @@ import ClockIcon from '../utils/icons/ClockIcon';
 import { getItemUrl } from '../../helpers';
 import Divider from '../utils/Divider';
 import Markdown from '../utils/Markdown';
+import { selectShowDurability } from '../../store/uiOptions';
+
+/** Format slot weight the same way slots used to (g / kg) */
+const formatWeight = (weight: number) => {
+  if (weight <= 0) return null;
+  if (weight >= 1000) {
+    return `${(weight / 1000).toLocaleString('en-us', { minimumFractionDigits: 2 })}kg`;
+  }
+  return `${weight.toLocaleString('en-us', { minimumFractionDigits: 0 })}g`;
+};
 
 const SlotTooltip: React.ForwardRefRenderFunction<
   HTMLDivElement,
   { item: SlotWithItem; inventoryType: Inventory['type']; style: React.CSSProperties }
 > = ({ item, inventoryType, style }, ref) => {
   const additionalMetadata = useAppSelector((state) => state.inventory.additionalMetadata);
+  const showDurability = useAppSelector(selectShowDurability);
   const itemData = useMemo(() => Items[item.name], [item]);
   const ingredients = useMemo(() => {
     if (!item.ingredients) return null;
@@ -20,6 +31,7 @@ const SlotTooltip: React.ForwardRefRenderFunction<
   }, [item]);
   const description = item.metadata?.description || itemData?.description;
   const ammoName = itemData?.ammoName && Items[itemData?.ammoName]?.label;
+  const weightLabel = formatWeight(item.weight);
 
   return (
     <>
@@ -29,6 +41,11 @@ const SlotTooltip: React.ForwardRefRenderFunction<
             <p>{item.name}</p>
           </div>
           <Divider />
+          {weightLabel && (
+            <p>
+              {Locale.ui_weight || 'Weight'}: {weightLabel}
+            </p>
+          )}
         </div>
       ) : (
         <div style={{ ...style }} className="tooltip-wrapper" ref={ref}>
@@ -51,7 +68,12 @@ const SlotTooltip: React.ForwardRefRenderFunction<
           )}
           {inventoryType !== 'crafting' ? (
             <>
-              {item.durability !== undefined && (
+              {weightLabel && (
+                <p>
+                  {Locale.ui_weight || 'Weight'}: {weightLabel}
+                </p>
+              )}
+              {showDurability && item.durability !== undefined && (
                 <p>
                   {Locale.ui_durability}: {Math.trunc(item.durability)}
                 </p>
