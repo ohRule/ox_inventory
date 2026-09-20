@@ -52,6 +52,7 @@ export const canPurchaseItem = (item: Slot, inventory: { type: Inventory['type']
 
 export const canCraftItem = (item: Slot, inventoryType: string) => {
   if (!isSlotWithItem(item) || inventoryType !== 'crafting') return true;
+  if (item.locked) return false;
   if (!item.ingredients) return true;
   const leftInventory = store.getState().inventory.leftInventory;
   const showDurability = store.getState().uiOptions.showDurability;
@@ -87,6 +88,17 @@ export const isSlotWithItem = (slot: Slot, strict: boolean = false): slot is Slo
   (slot.name !== undefined && slot.weight !== undefined) ||
   (strict && slot.name !== undefined && slot.count !== undefined && slot.weight !== undefined);
 
+/** Pawn + trader use the classic shop grid instead of the cart panel */
+export const isGridShop = (style?: Inventory['style']) => style === 'pawn' || style === 'trader';
+
+/** Payout per unit when selling this listing back to the shop */
+export const shopSellPrice = (item: Slot, style?: Inventory['style']): number | undefined => {
+  if (!isSlotWithItem(item)) return;
+  if (style === 'pawn' && item.price !== undefined) return item.price;
+  if (typeof item.buybackPrice === 'number') return item.buybackPrice;
+  if (item.metadata?.placeholder && typeof item.metadata.price === 'number') return item.metadata.price;
+};
+
 /** Find the live inventory item a hotbar bind currently points at. */
 export const resolveHotbarItem = (
   bind: { slot: number; name: string; serial?: string } | null | undefined,
@@ -101,6 +113,33 @@ export const resolveHotbarItem = (
   if (bySlot && matches(bySlot)) return bySlot;
 
   return items.find(matches);
+};
+
+/** 0-based hotbar index for a used/equipped inventory item, or null if it is not bound. */
+export const matchHotbarIndex = (
+  binds: ({ slot: number; name: string; serial?: string } | null)[],
+  items: Slot[],
+  ref: { slot?: number; name?: string; serial?: string } | false | null | undefined
+): number | null => {
+  if (!ref || !ref.name) return null;
+
+  for (let i = 0; i < binds.length; i++) {
+    const bind = binds[i];
+    if (!bind || bind.name !== ref.name) continue;
+
+    if (ref.serial && bind.serial && bind.serial === ref.serial) return i;
+    if (ref.slot && bind.slot === ref.slot) return i;
+
+    const live = resolveHotbarItem(bind, items);
+    if (live && ref.slot && live.slot === ref.slot) return i;
+    if (live && ref.serial && live.metadata?.serial === ref.serial) return i;
+  }
+
+  for (let i = 0; i < binds.length; i++) {
+    if (binds[i]?.name === ref.name) return i;
+  }
+
+  return null;
 };
 
 /** Display stub when a bind exists but the item isn't in the inventory anymore. */
@@ -120,6 +159,31 @@ export const hotbarPlaceholder = (
 
 export const canStack = (sourceSlot: Slot, targetSlot: Slot) =>
   sourceSlot.name === targetSlot.name && isEqual(sourceSlot.metadata, targetSlot.metadata);
+
+/** Furnace tray for a slot: ore, fuel, or output. */
+export const furnaceZone = (inventory: Inventory, slot: number): 'ore' | 'fuel' | 'output' => {
+  const ore = inventory.oreSlots || 0;
+  const fuel = inventory.fuelSlots || 0;
+  if (slot <= ore) return 'ore';
+  if (slot <= ore + fuel) return 'fuel';
+  return 'output';
+};
+
+export const furnaceAllows = (inventory: Inventory, slot: number, name?: string) => {
+  if (!name) return false;
+  const zone = furnaceZone(inventory, slot);
+  if (zone === 'ore') return !!inventory.acceptOre?.[name];
+  if (zone === 'fuel') return !!inventory.acceptFuel?.[name];
+  return false;
+};
+
+/** Inclusive slot range for shift-clicking an item into the matching furnace tray. */
+export const furnaceInputRange = (inventory: Inventory, name: string): [number, number] | undefined => {
+  const ore = inventory.oreSlots || 0;
+  const fuel = inventory.fuelSlots || 0;
+  if (inventory.acceptFuel?.[name]) return [ore + 1, ore + fuel];
+  if (inventory.acceptOre?.[name]) return [1, ore];
+};
 
 export const findAvailableSlot = (item: Slot, data: ItemData, items: Slot[]) => {
   if (!data.stack) return items.find((target) => target.name === undefined);

@@ -5,6 +5,8 @@ return {
 			weight = 3300,
 			durability = 0.03,
 			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_SNOWLAUNCHER'] = {
@@ -19,6 +21,8 @@ return {
 			weight = 1500,
 			durability = 0.075,
 			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_ADVANCEDRIFLE'] = {
@@ -26,6 +30,8 @@ return {
 			weight = 3100,
 			durability = 0.03,
 			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_APPISTOL'] = {
@@ -33,6 +39,8 @@ return {
 			weight = 1400,
 			durability = 0.1,
 			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_ASSAULTRIFLE'] = {
@@ -40,6 +48,8 @@ return {
 			weight = 4500,
 			durability = 0.03,
 			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_ASSAULTRIFLE_MK2'] = {
@@ -47,20 +57,26 @@ return {
 			weight = 2950,
 			durability = 0.03,
 			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_ASSAULTSHOTGUN'] = {
 			label = 'Assault Shotgun',
 			weight = 5200,
 			durability = 0.05,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_ASSAULTSMG'] = {
 			label = 'Assault SMG',
 			weight = 2900,
 			durability = 0.05,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_BALL'] = {
@@ -91,21 +107,27 @@ return {
 			label = 'Bullpup Rifle',
 			weight = 2900,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_BULLPUPRIFLE_MK2'] = {
 			label = 'Bullpup Rifle MK2',
 			weight = 2900,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_BULLPUPSHOTGUN'] = {
 			label = 'Bullpup Shotgun',
 			weight = 3100,
 			durability = 0.2,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_BZGAS'] = {
@@ -118,77 +140,97 @@ return {
 			label = 'Carbine Rifle',
 			weight = 3100,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_CARBINERIFLE_MK2'] = {
 			label = 'Carbine Rifle MK2',
 			weight = 3000,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_CERAMICPISTOL'] = {
 			label = 'Ceramic Pistol',
 			weight = 800,
 			durability = 0.2,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_PISTOLXM3'] = {
 			label = 'WM 29 Pistol',
 			weight = 969,
 			durability = 0.2,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_COMBATMG'] = {
 			label = 'Combat MG',
 			weight = 7500,
 			durability = 0.02,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_COMBATMG_MK2'] = {
 			label = 'Combat MG MK2',
 			weight = 8000,
 			durability = 0.02,
-			ammoname = 'ammo-rifle2'
+			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_COMBATPDW'] = {
 			label = 'Combat PDW',
 			weight = 2300,
 			durability = 0.1,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_COMBATPISTOL'] = {
 			label = 'Combat Pistol',
 			weight = 785,
 			durability = 0.2,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_COMBATSHOTGUN'] = {
 			label = 'Combat Shotgun',
 			weight = 4400,
 			durability = 0.2,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_COMPACTLAUNCHER'] = {
 			label = 'Compact Grenade Launcher',
 			weight = 2500,
 			durability = 0.05,
-			ammoname = 'ammo-grenade'
+			ammoname = 'ammo-grenade',
 		},
 
 		['WEAPON_COMPACTRIFLE'] = {
 			label = 'Compact Rifle',
 			weight = 3600,
 			durability = 0.05,
-			ammoname = 'ammo-rifle2'
+			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_CROWBAR'] = {
@@ -207,21 +249,25 @@ return {
 			label = 'Double Barrel Shotgun',
 			weight = 3175,
 			durability = 0.4,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_DOUBLEACTION'] = {
 			label = 'Double Action Revolver',
 			weight = 940,
 			durability = 0.2,
-			ammoname = 'ammo-38'
+			ammoname = 'ammo-38',
+			useMagazine = true,
+			emptyMagazine = 'empty_38_magazine'
 		},
 
 		['WEAPON_EMPLAUNCHER'] = {
 			label = 'Compact EMP Launcher',
 			weight = 2750,
 			durability = 0.2,
-			ammoname = 'ammo-emp'
+			ammoname = 'ammo-emp',
 		},
 
 		['WEAPON_FIREEXTINGUISHER'] = {
@@ -234,7 +280,7 @@ return {
 			label = 'Firework Launcher',
 			weight = 1000,
 			durability = 0.5,
-			ammoname = 'ammo-firework'
+			ammoname = 'ammo-firework',
 		},
 
 		['WEAPON_FLARE'] = {
@@ -247,7 +293,7 @@ return {
 			label = 'Flare Gun',
 			weight = 1000,
 			durability = 0.5,
-			ammoname = 'ammo-flare'
+			ammoname = 'ammo-flare',
 		},
 
 		['WEAPON_FLASHLIGHT'] = {
@@ -272,14 +318,16 @@ return {
 			label = 'Grenade Launcher',
 			weight = 6500,
 			durability = 0.05,
-			ammoname = 'ammo-grenade'
+			ammoname = 'ammo-grenade',
 		},
 
 		['WEAPON_GUSENBERG'] = {
 			label = 'Gusenberg',
 			weight = 4900,
 			durability = 0.04,
-			ammoname = 'ammo-45'
+			ammoname = 'ammo-45',
+			useMagazine = true,
+			emptyMagazine = 'empty_45_magazine'
 		},
 
 		['WEAPON_HAMMER'] = {
@@ -298,7 +346,9 @@ return {
 			label = 'Heavy Rifle',
 			weight = 3300,
 			durability = 0.2,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_HAZARDCAN'] = {
@@ -315,7 +365,7 @@ return {
 			label = 'Homing Launcher',
 			weight = 10000,
 			durability = 0.6,
-			ammoname = 'ammo-rocket'
+			ammoname = 'ammo-rocket',
 		},
 
 		['WEAPON_FERTILIZERCAN'] = {
@@ -327,28 +377,36 @@ return {
 			label = 'Heavy Pistol',
 			weight = 1100,
 			durability = 0.2,
-			ammoname = 'ammo-45'
+			ammoname = 'ammo-45',
+			useMagazine = true,
+			emptyMagazine = 'empty_45_magazine'
 		},
 
 		['WEAPON_HEAVYSHOTGUN'] = {
 			label = 'Heavy Shotgun',
 			weight = 3600,
 			durability = 0.1,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_HEAVYSNIPER'] = {
 			label = 'Heavy Sniper',
 			weight = 12700,
 			durability = 0.5,
-			ammoname = 'ammo-heavysniper'
+			ammoname = 'ammo-heavysniper',
+			useMagazine = true,
+			emptyMagazine = 'empty_heavysniper_magazine'
 		},
 
 		['WEAPON_HEAVYSNIPER_MK2'] = {
 			label = 'Heavy Sniper MK2',
 			weight = 14000,
 			durability = 0.5,
-			ammoname = 'ammo-heavysniper'
+			ammoname = 'ammo-heavysniper',
+			useMagazine = true,
+			emptyMagazine = 'empty_heavysniper_magazine'
 		},
 
 		['WEAPON_KNIFE'] = {
@@ -373,63 +431,81 @@ return {
 			label = 'Machine Pistol',
 			weight = 1400,
 			durability = 0.05,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_MARKSMANPISTOL'] = {
 			label = 'Marksman Pistol',
 			weight = 1588,
 			durability = 0.5,
-			ammoname = 'ammo-22'
+			ammoname = 'ammo-22',
+			useMagazine = true,
+			emptyMagazine = 'empty_22_magazine'
 		},
 
 		['WEAPON_MARKSMANRIFLE'] = {
 			label = 'Marksman Rifle',
 			weight = 7500,
 			durability = 0.4,
-			ammoname = 'ammo-sniper'
+			ammoname = 'ammo-sniper',
+			useMagazine = true,
+			emptyMagazine = 'empty_sniper_magazine'
 		},
 
 		['WEAPON_MARKSMANRIFLE_MK2'] = {
 			label = 'Marksman Rifle MK2',
 			weight = 4000,
 			durability = 0.4,
-			ammoname = 'ammo-sniper'
+			ammoname = 'ammo-sniper',
+			useMagazine = true,
+			emptyMagazine = 'empty_sniper_magazine'
 		},
 
 		['WEAPON_MG'] = {
 			label = 'Machine Gun',
 			weight = 9000,
 			durability = 0.02,
-			ammoname = 'ammo-rifle2'
+			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_MINIGUN'] = {
 			label = 'Minigun',
 			weight = 38500,
 			durability = 0.1,
-			ammoname = 'ammo-rifle2'
+			ammoname = 'ammo-rifle2',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle2_magazine'
 		},
 
 		['WEAPON_MICROSMG'] = {
 			label = 'Micro SMG',
 			weight = 3000,
 			durability = 0.1,
-			ammoname = 'ammo-45'
+			ammoname = 'ammo-45',
+			useMagazine = true,
+			emptyMagazine = 'empty_45_magazine'
 		},
 
 		['WEAPON_MILITARYRIFLE'] = {
 			label = 'Military Rifle',
 			weight = 3600,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_MINISMG'] = {
 			label = 'Mini SMG',
 			weight = 1270,
 			durability = 0.05,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_MOLOTOV'] = {
@@ -442,14 +518,16 @@ return {
 			label = 'Musket',
 			weight = 4500,
 			durability = 0.5,
-			ammoname = 'ammo-musket'
+			ammoname = 'ammo-musket',
 		},
 
 		['WEAPON_NAVYREVOLVER'] = {
 			label = 'Navy Revolver',
 			weight = 4000,
 			durability = 0.2,
-			ammoname = 'ammo-44'
+			ammoname = 'ammo-44',
+			useMagazine = true,
+			emptyMagazine = 'empty_44_magazine'
 		},
 
 		['WEAPON_NIGHTSTICK'] = {
@@ -467,7 +545,9 @@ return {
 			label = 'Perico Pistol',
 			weight = 1750,
 			durability = 0.1,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_PIPEBOMB'] = {
@@ -481,20 +561,26 @@ return {
 			weight = 1130,
 			durability = 0.1,
 			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_PISTOL50'] = {
 			label = 'Pistol .50',
 			weight = 2000,
 			durability = 0.1,
-			ammoname = 'ammo-50'
+			ammoname = 'ammo-50',
+			useMagazine = true,
+			emptyMagazine = 'empty_50_magazine'
 		},
 
 		['WEAPON_PISTOL_MK2'] = {
 			label = 'Pistol MK2',
 			weight = 1000,
 			durability = 0.5,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_POOLCUE'] = {
@@ -519,35 +605,39 @@ return {
 			label = 'Pump Shotgun',
 			weight = 3400,
 			durability = 0.1,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_PUMPSHOTGUN_MK2'] = {
 			label = 'Pump Shotgun MK2',
 			weight = 3200,
 			durability = 0.1,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_RAILGUN'] = {
 			label = 'Railgun',
 			weight = 3570,
 			durability = 0.5,
-			ammoname = 'ammo-railgun'
+			ammoname = 'ammo-railgun',
 		},
 
 		['WEAPON_RAILGUNXM3'] = {
 			label = 'Railgun XM3',
 			weight = 3570,
 			durability = 0.5,
-			ammoname = 'ammo-railgun'
+			ammoname = 'ammo-railgun',
 		},
 
 		['WEAPON_RAYCARBINE'] = {
 			label = 'Unholy Hellbringer',
 			weight = 3620,
 			durability = 0.2,
-			ammoname = 'ammo-laser'
+			ammoname = 'ammo-laser',
 		},
 
 		['WEAPON_RAYPISTOL'] = {
@@ -560,42 +650,52 @@ return {
 			label = 'Revolver',
 			weight = 2260,
 			durability = 0.1,
-			ammoname = 'ammo-44'
+			ammoname = 'ammo-44',
+			useMagazine = true,
+			emptyMagazine = 'empty_44_magazine'
 		},
 
 		['WEAPON_REVOLVER_MK2'] = {
 			label = 'Revolver MK2',
 			weight = 2600,
 			durability = 0.1,
-			ammoname = 'ammo-44'
+			ammoname = 'ammo-44',
+			useMagazine = true,
+			emptyMagazine = 'empty_44_magazine'
 		},
 
 		['WEAPON_RPG'] = {
 			label = 'RPG',
 			weight = 5000,
 			durability = 0.3,
-			ammoname = 'ammo-rocket'
+			ammoname = 'ammo-rocket',
 		},
 
 		['WEAPON_SAWNOFFSHOTGUN'] = {
 			label = 'Sawn Off Shotgun',
 			weight = 2380,
 			durability = 0.1,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_SMG'] = {
 			label = 'SMG',
 			weight = 3084,
 			durability = 0.8,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_SMG_MK2'] = {
 			label = 'SMG Mk2',
 			weight = 2700,
 			durability = 0.05,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_SMOKEGRENADE'] = {
@@ -608,7 +708,9 @@ return {
 			label = 'Sniper Rifle',
 			weight = 5000,
 			durability = 0.5,
-			ammoname = 'ammo-sniper'
+			ammoname = 'ammo-sniper',
+			useMagazine = true,
+			emptyMagazine = 'empty_sniper_magazine'
 		},
 
 		['WEAPON_SNOWBALL'] = {
@@ -621,28 +723,36 @@ return {
 			label = 'SNS Pistol',
 			weight = 465,
 			durability = 0.1,
-			ammoname = 'ammo-45'
+			ammoname = 'ammo-45',
+			useMagazine = true,
+			emptyMagazine = 'empty_45_magazine'
 		},
 
 		['WEAPON_SNSPISTOL_MK2'] = {
 			label = 'SNS Pistol MK2',
 			weight = 465,
 			durability = 0.1,
-			ammoname = 'ammo-45'
+			ammoname = 'ammo-45',
+			useMagazine = true,
+			emptyMagazine = 'empty_45_magazine'
 		},
 
 		['WEAPON_SPECIALCARBINE'] = {
 			label = 'Special Carbine',
 			weight = 3000,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_SPECIALCARBINE_MK2'] = {
 			label = 'Special Carbine MK2',
 			weight = 3370,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_STICKYBOMB'] = {
@@ -667,7 +777,9 @@ return {
 			label = 'Sweeper Shotgun',
 			weight = 4400,
 			durability = 0.05,
-			ammoname = 'ammo-shotgun'
+			ammoname = 'ammo-shotgun',
+			useMagazine = true,
+			emptyMagazine = 'empty_shotgun_shell'
 		},
 
 		['WEAPON_SWITCHBLADE'] = {
@@ -681,14 +793,16 @@ return {
 			label = 'Vintage Pistol',
 			weight = 700,
 			durability = 0.1,
-			ammoname = 'ammo-9'
+			ammoname = 'ammo-9',
+			useMagazine = true,
+			emptyMagazine = 'empty_9_magazine'
 		},
 
 		['WEAPON_RAYMINIGUN'] = {
 			label = 'Widowmaker',
 			weight = 7000,
 			durability = 0.1,
-			ammoname = 'ammo-laser'
+			ammoname = 'ammo-laser',
 		},
 
 		['WEAPON_WRENCH'] = {
@@ -701,14 +815,18 @@ return {
 			label = 'Precision Rifle',
 			weight = 4800,
 			durability = 0.4,
-			ammoname = 'ammo-sniper'
+			ammoname = 'ammo-sniper',
+			useMagazine = true,
+			emptyMagazine = 'empty_sniper_magazine'
 		},
 
 		['WEAPON_TACTICALRIFLE'] = {
 			label = 'Tactical Rifle',
 			weight = 3400,
 			durability = 0.03,
-			ammoname = 'ammo-rifle'
+			ammoname = 'ammo-rifle',
+			useMagazine = true,
+			emptyMagazine = 'empty_rifle_magazine'
 		},
 
 		['WEAPON_TEARGAS'] = {
@@ -1783,33 +1901,93 @@ return {
 
 	Ammo = {
 		['ammo-22'] = {
-			label = '.22 Long Rifle',
+			label = '.22 Long Rifle Magazine',
 			weight = 3,
 		},
 
+		['empty_22_magazine'] = {
+			label = 'Empty .22 Long Rifle Magazine',
+			weight = 10,
+		},
+
+		['bullet-22'] = {
+			label = '.22 Long Rifle Bullet',
+			weight = 1,
+		},
+
 		['ammo-38'] = {
-			label = '.38 LC',
+			label = '.38 LC Magazine',
 			weight = 15,
+		},
+
+		['empty_38_magazine'] = {
+			label = 'Empty .38 LC Magazine',
+			weight = 20,
+		},
+
+		['bullet-38'] = {
+			label = '.38 LC Bullet',
+			weight = 2,
 		},
 
 		['ammo-44'] = {
-			label = '.44 Magnum',
+			label = '.44 Magnum Magazine',
 			weight = 16,
 		},
 
+		['empty_44_magazine'] = {
+			label = 'Empty .44 Magnum Magazine',
+			weight = 20,
+		},
+
+		['bullet-44'] = {
+			label = '.44 Magnum Bullet',
+			weight = 4,
+		},
+
 		['ammo-45'] = {
-			label = '.45 ACP',
+			label = '.45 ACP Magazine',
 			weight = 15,
 		},
 
+		['empty_45_magazine'] = {
+			label = 'Empty .45 ACP Magazine',
+			weight = 20,
+		},
+
+		['bullet-45'] = {
+			label = '.45 ACP Bullet',
+			weight = 3,
+		},
+
 		['ammo-50'] = {
-			label = '.50 AE',
+			label = '.50 AE Magazine',
 			weight = 45,
 		},
 
+		['empty_50_magazine'] = {
+			label = 'Empty .50 AE Magazine',
+			weight = 150,
+		},
+
+		['bullet-50'] = {
+			label = '.50 AE Bullet',
+			weight = 6,
+		},
+
 		['ammo-9'] = {
-			label = '9mm',
+			label = '9mm Magazine',
 			weight = 7,
+		},
+
+		['empty_9_magazine'] = {
+			label = 'Empty 9mm Magazine',
+			weight = 20,
+		},
+
+		['bullet-9'] = {
+			label = '9mm Bullet',
+			weight = 2,
 		},
 
 		['ammo-firework'] = {
@@ -1828,7 +2006,17 @@ return {
 		},
 
 		['ammo-heavysniper'] = {
-			label = '.50 BMG',
+			label = '.50 BMG Magazine',
+			weight = 51,
+		},
+
+		['empty_heavysniper_magazine'] = {
+			label = 'Empty .50 BMG Magazine',
+			weight = 50,
+		},
+
+		['bullet-heavysniper'] = {
+			label = '.50 BMG Bullet',
 			weight = 51,
 		},
 
@@ -1848,12 +2036,32 @@ return {
 		},
 
 		['ammo-rifle'] = {
-			label = '5.56x45',
+			label = '5.56x45 Magazine',
+			weight = 4,
+		},
+
+		['empty_rifle_magazine'] = {
+			label = 'Empty 5.56x45 Magazine',
+			weight = 150,
+		},
+
+		['bullet-rifle'] = {
+			label = '5.56x45 Bullet',
 			weight = 4,
 		},
 
 		['ammo-rifle2'] = {
-			label = '7.62x39',
+			label = '7.62x39 Magazine',
+			weight = 8,
+		},
+
+		['empty_rifle2_magazine'] = {
+			label = 'Empty 7.62x39 Magazine',
+			weight = 150,
+		},
+
+		['bullet-rifle2'] = {
+			label = '7.62x39 Bullet',
 			weight = 8,
 		},
 
@@ -1863,12 +2071,32 @@ return {
 		},
 
 		['ammo-shotgun'] = {
-			label = '12 Gauge',
+			label = '12 Gauge Shell',
 			weight = 38,
 		},
 
+		['empty_shotgun_shell'] = {
+			label = 'Empty 12 Gauge Shell',
+			weight = 20,
+		},
+
+		['bullet-shotgun'] = {
+			label = '12 Gauge Pellets',
+			weight = 18,
+		},
+
 		['ammo-sniper'] = {
-			label = '7.62x51',
+			label = '7.62x51 Magazine',
+			weight = 9,
+		},
+
+		['empty_sniper_magazine'] = {
+			label = 'Empty 7.62x51 Magazine',
+			weight = 20,
+		},
+
+		['bullet-sniper'] = {
+			label = '7.62x51 Bullet',
 			weight = 9,
 		},
 

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Inventory } from '../../typings';
+import { Inventory, InventoryType } from '../../typings';
 import InventorySlot from './InventorySlot';
 import { getTotalWeight } from '../../helpers';
 import { useAppSelector } from '../../store';
 import { useIntersection } from '../../hooks/useIntersection';
+import useNuiEvent from '../../hooks/useNuiEvent';
+import { Locale } from '../../store/locale';
 
 const PAGE_SIZE = 30;
 
@@ -20,9 +22,12 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
     [inventory.maxWeight, inventory.items]
   );
   const [page, setPage] = useState(0);
+  const [searchingSlot, setSearchingSlot] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
   const containerRef = useRef(null);
   const { ref, entry } = useIntersection({ threshold: 0.5 });
   const isBusy = useAppSelector((state) => state.inventory.isBusy);
+  const isLoot = inventory.type === InventoryType.LOOTPROP;
 
   useEffect(() => {
     if (entry && entry.isIntersecting) {
@@ -30,9 +35,43 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
     }
   }, [entry]);
 
+  useEffect(() => {
+    setSearching(false);
+    setSearchingSlot(null);
+  }, [inventory.id, isLoot]);
+
+  useNuiEvent<{ slot: number; inventory?: string }>('lootSearch', (data) => {
+    if (!isLoot) return;
+    if (data.inventory && data.inventory !== inventory.id) return;
+    setSearching(true);
+    setSearchingSlot(data.slot);
+  });
+
+  useNuiEvent<{ items?: { item?: { slot: number } } | Array<{ item?: { slot: number } }> }>('refreshSlots', (data) => {
+    if (!isLoot || searchingSlot == null || !data?.items) return;
+    const items = Array.isArray(data.items) ? data.items : [data.items];
+    if (items.some((entry) => entry.item?.slot === searchingSlot)) {
+      setSearchingSlot(null);
+    }
+  });
+
+  useNuiEvent('lootSearchDone', () => {
+    if (!isLoot) return;
+    setSearching(false);
+    setSearchingSlot(null);
+  });
+
   return (
     <div className="inventory-grid-wrapper" style={{ pointerEvents: isBusy ? 'none' : 'auto' }}>
       <div className="inventory-grid-header-wrapper">
+        {inventory.type === InventoryType.SHOP && inventory.label && (
+          <p className="inventory-weight-text" style={{ marginRight: 'auto' }}>
+            {inventory.label}
+          </p>
+        )}
+        {isLoot && searching && (
+          <p className="inventory-weight-text">{Locale.ui_searching || 'Searching...'}</p>
+        )}
         {inventory.maxWeight !== undefined && (
           <>
             <p className="inventory-weight-text">
@@ -51,6 +90,8 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
             inventoryType={inventory.type}
             inventoryGroups={inventory.groups}
             inventoryId={inventory.id}
+            searching={searchingSlot === item.slot}
+            disableDrop={isLoot}
           />
         ))}
       </div>

@@ -47,6 +47,12 @@ function server.setPlayerInventory(player, data)
 
                 if item then
                     v.metadata = Items.CheckMetadata(v.metadata or {}, item, v.name, ostime)
+
+                    -- Job loadouts are session-only and must not persist through a relog
+                    if v.metadata.loadout then
+                        goto continue
+                    end
+
                     local weight = Inventory.SlotWeight(item, v)
                     totalWeight = totalWeight + weight
 
@@ -55,6 +61,7 @@ function server.setPlayerInventory(player, data)
                     .close }
                 end
             end
+            ::continue::
         end
     end
 
@@ -198,7 +205,11 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
             right = Inventory(data, left, ignoreSecurityChecks)
             if right == false then return false end
         elseif isDataTable then
-            if data.netid then
+            if invType == 'armoury' then
+                local Armoury = require 'modules.loadout.server'
+                right = Armoury.ensure(source, data.netid)
+                if not right then return end
+            elseif data.netid then
                 local entity = NetworkGetEntityFromNetworkId(data.netid)
 
                 if not entity then return end
@@ -243,6 +254,22 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
                 end
             elseif invType == 'drop' then
                 right = Inventory(data.id)
+            elseif invType == 'recycler' then
+                local Recycler = require 'modules.recycler.server'
+                right = Recycler.ensure(type(data.id) == 'string' and data.id or '')
+                if not right then return end
+            elseif invType == 'furnace' then
+                local Furnace = require 'modules.furnace.server'
+                right = Furnace.ensure(type(data.id) == 'string' and data.id or '')
+                if not right then return end
+            elseif invType == 'research' then
+                local Crafting = require 'modules.crafting.server'
+                right = Crafting.ensureResearch(data.id, data.index, left.owner)
+                if not right then return end
+            elseif invType == 'lootprop' then
+                local Loot = require 'modules.loot.server'
+                right = Loot.ensure(type(data.id) == 'string' and data.id or '')
+                if not right then return end
             else
                 return
             end
@@ -351,11 +378,24 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
         type = right.player and 'otherplayer' or right.type,
         slots = right.slots,
         weight = right.weight,
-        maxWeight = right.maxWeight,
-        items = right.items,
+        maxWeight = right.type == 'lootprop' and nil or right.maxWeight,
+        items = right.type == 'lootprop' and (require 'modules.loot.server').visibleItems(right, source) or right.items,
         coords = closestCoords or right.coords,
         distance = right.distance,
-        instance = right.instance
+        instance = right.instance,
+        inputSlots = right.inputSlots,
+        oreSlots = right.oreSlots,
+        fuelSlots = right.fuelSlots,
+        acceptOre = right.acceptOre,
+        acceptFuel = right.acceptFuel,
+        running = right.running,
+        process = (right.type == 'recycler' and (require 'modules.recycler.server').snapshotProcess(right))
+            or (right.type == 'furnace' and (require 'modules.furnace.server').snapshotProcess(right))
+            or nil,
+		researchRecipes = right.researchRecipes,
+        unlockScrapItem = right.unlockScrapItem,
+        benchId = right.benchId,
+        index = right.benchIndex,
     }
 end
 
@@ -447,6 +487,21 @@ RegisterNetEvent('ox_inventory:usedItemInternal', function(slot)
     TriggerEvent('ox_inventory:usedItem', inventory.id, item.name, item.slot, next(item.metadata) and item.metadata)
 
     inventory.usingItem = nil
+end)
+
+-- Sync server state when client pre-emptively equips a weapon on vehicle exit
+RegisterNetEvent('ox_inventory:vehicleExitReequipWeapon', function(slot)
+	local inventory = Inventory(source)
+	if not inventory or not inventory.player then return end
+
+	local data = inventory.items[slot]
+	if not data then return end
+
+	local item = Items(data.name)
+	if not item or not item.weapon then return end
+
+	inventory.weapon = slot
+	inventory.usingItem = data
 end)
 
 local GetLocks = require 'modules.locks'
@@ -829,3 +884,11 @@ lib.registerHook('ox_lib:setPlayerState', nil, {
 lib.registerHook('ox_lib:setPlayerState', nil, {
     key = 'canSteal'
 })
+
+require 'modules.dragcraft.server'
+require 'modules.recycler.server'
+require 'modules.furnace.server'
+require 'modules.loot.server'
+require 'modules.ammobox.server'
+require 'modules.magload.server'
+require 'modules.loadout.server'

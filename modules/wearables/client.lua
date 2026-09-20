@@ -2,86 +2,176 @@ if not lib then return end
 
 local Utils = require 'modules.utils.client'
 
-local previewCam
+local HUD_PAUSE_BG = 117
+local MENU_HASH = `FE_MENU_VERSION_EMPTY_NO_BACKGROUND`
+
 local previewActive = false
+local previewGen = 0
+local previewPed
 local savedBlur = false
+local ignoreExitUntil = 0
 
----Place a scripted cam so the ped sits in the open wearables preview area (right side)
-local function updatePreviewCam()
-	if not previewCam then return end
+local function deletePreviewPed()
+	if previewPed and DoesEntityExist(previewPed) then
+		SetEntityAsMissionEntity(previewPed, true, true)
+		DeletePed(previewPed)
+		if DoesEntityExist(previewPed) then
+			DeleteEntity(previewPed)
+		end
+	end
+	previewPed = nil
+end
 
-	local ped = cache.ped
-	local coords = GetEntityCoords(ped)
-	-- Offset slightly left of the ped's forward so they read on the right half of the screen
-	local camCoords = GetOffsetFromEntityInWorldCoords(ped, -0.55, 2.35, 0.45)
+-- The pause menu draws its own copy; the world clone must never be seen.
+local function hideClone(ped, relocate)
+	if not ped or not DoesEntityExist(ped) then return end
 
-	SetCamCoord(previewCam, camCoords.x, camCoords.y, camCoords.z)
-	PointCamAtCoord(previewCam, coords.x, coords.y, coords.z + 0.35)
+	if relocate then
+		local coords = GetEntityCoords(cache.ped or PlayerPedId())
+		SetEntityCoords(ped, coords.x, coords.y, coords.z - 100.0, false, false, false, false)
+	end
+
+	FreezeEntityPosition(ped, true)
+	SetEntityCollision(ped, false, false)
+	SetEntityVisible(ped, false, false)
+	SetEntityAlpha(ped, 0, false)
+	SetEntityInvincible(ped, true)
+	NetworkSetEntityInvisibleToNetwork(ped, true)
+end
+
+local function restorePauseBg()
+	-- Default pause-menu overlay colour
+	ReplaceHudColourWithRgba(HUD_PAUSE_BG, 0, 0, 0, 186)
+end
+
+local function shouldIgnoreExit()
+	return GetGameTimer() < ignoreExitUntil
+end
+
+local function armIgnoreExit()
+	ignoreExitUntil = GetGameTimer() + 1000
+	client.wearablesPreview = true
 end
 
 local function stopWearablesPreview()
-	if not previewActive then return end
+	previewGen += 1
 
-	previewActive = false
-
-	if previewCam then
-		RenderScriptCams(false, true, 250, true, false)
-		DestroyCam(previewCam, false)
-		previewCam = nil
+	if not previewActive then
+		deletePreviewPed()
+		return
 	end
 
-	-- Restore inventory blur if it was on before wearables opened
+	previewActive = false
+	-- Closing the overlay injects Escape and leaves IsPauseMenuActive true for a moment
+	armIgnoreExit()
+
+	SetPauseMenuPedSleepState(false)
+	SetFrontendActive(false)
+	deletePreviewPed()
+	restorePauseBg()
+
+	if IsNuiFocused() then
+		SetNuiFocus(true, true)
+	end
+
 	if savedBlur and client.screenblur then
 		Utils.blurIn()
 	end
 	savedBlur = false
+
+	CreateThread(function()
+		local untilTime = ignoreExitUntil
+		local gen = previewGen
+		while GetGameTimer() < untilTime and previewGen == gen do
+			DisableControlAction(0, 199, true)
+			DisableControlAction(0, 200, true)
+			if IsPauseMenuActive() then
+				SetFrontendActive(false)
+			end
+			Wait(0)
+		end
+		-- Don't clear the flag if wearables was reopened
+		if previewGen == gen and not previewActive then
+			client.wearablesPreview = false
+		end
+	end)
 end
 
+---Pause-menu clone ped (studio lighting) instead of a scripted cam on the real player.
 local function startWearablesPreview()
-	if previewActive then
-		updatePreviewCam()
-		return
-	end
+	if previewActive then return end
 
 	previewActive = true
-	savedBlur = client.screenblur == true
+	armIgnoreExit()
+	previewGen += 1
+	local gen = previewGen
 
-	-- Blur hides the ped; clear it while previewing
+	savedBlur = client.screenblur == true
 	if client.screenblur then
 		Utils.blurOut()
 	end
 
-	local ped = cache.ped
-	local coords = GetEntityCoords(ped)
-	local camCoords = GetOffsetFromEntityInWorldCoords(ped, -0.55, 2.35, 0.45)
-
-	previewCam = CreateCamWithParams(
-		'DEFAULT_SCRIPTED_CAMERA',
-		camCoords.x, camCoords.y, camCoords.z,
-		0.0, 0.0, 0.0,
-		42.0,
-		false,
-		0
-	)
-
-	PointCamAtCoord(previewCam, coords.x, coords.y, coords.z + 0.35)
-	SetCamActive(previewCam, true)
-	RenderScriptCams(true, true, 300, true, false)
-
 	CreateThread(function()
-		while previewActive do
-			updatePreviewCam()
-			-- Keep the ped still-ish for a cleaner preview
-			DisableControlAction(0, 30, true)
-			DisableControlAction(0, 31, true)
-			DisableControlAction(0, 21, true)
-			DisableControlAction(0, 22, true)
+		-- Previous overlay may still be shutting down; wait it out before opening a new one
+		local timeout = GetGameTimer() + 750
+		while previewGen == gen and previewActive and IsPauseMenuActive() and GetGameTimer() < timeout do
+			SetFrontendActive(false)
+			Wait(0)
+		end
+		if previewGen ~= gen or not previewActive then return end
+
+		deletePreviewPed()
+
+		SetFrontendActive(true)
+		ActivateFrontendMenu(MENU_HASH, false, -1)
+		ReplaceHudColourWithRgba(HUD_PAUSE_BG, 0, 0, 0, 0)
+		SetNuiFocus(true, true)
+		SetMouseCursorVisibleInMenus(false)
+
+		local playerPed = PlayerPedId()
+		local cloned = ClonePed(playerPed, false, false, false)
+		if not cloned or cloned == 0 then
+			if previewGen == gen then stopWearablesPreview() end
+			return
+		end
+
+		SetEntityAsMissionEntity(cloned, true, true)
+		hideClone(cloned, true)
+		previewPed = cloned
+
+		-- Keep pause controls dead while the overlay boots (GivePedToPauseMenu needs a short delay)
+		local readyAt = GetGameTimer() + 500
+		while previewActive and previewGen == gen and GetGameTimer() < readyAt do
+			hideClone(cloned)
+			SetMouseCursorVisibleInMenus(false)
+			DisableControlAction(0, 199, true)
+			DisableControlAction(0, 200, true)
+			Wait(0)
+		end
+		if previewGen ~= gen or not previewActive then
+			deletePreviewPed()
+			return
+		end
+
+		GivePedToPauseMenu(cloned, 2)
+		SetPauseMenuPedLighting(true)
+		SetPauseMenuPedSleepState(true)
+		hideClone(cloned)
+
+		-- Frontend steals the cursor otherwise
+		SetNuiFocus(true, true)
+		SetMouseCursorVisibleInMenus(false)
+
+		while previewActive and previewGen == gen do
+			hideClone(cloned)
+			SetMouseCursorVisibleInMenus(false)
+			DisableControlAction(0, 199, true)
+			DisableControlAction(0, 200, true)
 			Wait(0)
 		end
 	end)
 end
 
----NUI tells us which right-panel tab is active
 RegisterNUICallback('setRightPanelMode', function(data, cb)
 	cb(1)
 
@@ -96,4 +186,5 @@ end)
 return {
 	Start = startWearablesPreview,
 	Stop = stopWearablesPreview,
+	ShouldIgnoreExit = shouldIgnoreExit,
 }

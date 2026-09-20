@@ -10,18 +10,14 @@ anims[`GROUP_MELEE`] = { 'melee@holster', 'unholster', 200, 'melee@holster', 'ho
 anims[`GROUP_PISTOL`] = { 'reaction@intimidation@cop@unarmed', 'intro', 400, 'reaction@intimidation@cop@unarmed', 'outro', 450 }
 anims[`GROUP_STUNGUN`] = anims[`GROUP_PISTOL`]
 
-local function vehicleIsCycle(vehicle)
-	local class = GetVehicleClass(vehicle)
-	return class == 8 or class == 13
-end
-
-function Weapon.Equip(item, data, noWeaponAnim)
+function Weapon.Equip(item, data, noWeaponAnim, suppressNotification)
 	local playerPed = cache.ped
 	local coords = GetEntityCoords(playerPed, true)
     local sleep
 
 	if client.weaponanims then
-		if noWeaponAnim or (cache.vehicle and vehicleIsCycle(cache.vehicle)) then
+		-- Skip draw anim in vehicles so re-equip on exit is instant
+		if noWeaponAnim or cache.vehicle then
 			goto skipAnim
 		end
 
@@ -81,7 +77,6 @@ function Weapon.Equip(item, data, noWeaponAnim)
 	SetTimeout(0, function() RefillAmmoInstantly(playerPed) end)
 
 	if item.group == `GROUP_PETROLCAN` or item.group == `GROUP_FIREEXTINGUISHER` then
-		-- Fill level: prefer ammo; fall back to durability only when that system is enabled
 		if shared.durability and item.metadata.durability then
 			item.metadata.ammo = item.metadata.durability
 		end
@@ -90,7 +85,7 @@ function Weapon.Equip(item, data, noWeaponAnim)
 
 	TriggerEvent('ox_inventory:currentWeapon', item)
 
-	if client.weaponnotify then
+	if client.weaponnotify and not suppressNotification then
 		Utils.ItemNotify({ item, 'ui_equipped' })
 	end
 
@@ -105,7 +100,7 @@ function Weapon.Disarm(currentWeapon, noAnim)
 		SetPedAmmo(cache.ped, currentWeapon.hash, 0)
 
 		if client.weaponanims and not noAnim then
-			if cache.vehicle and vehicleIsCycle(cache.vehicle) then
+			if cache.vehicle then
 				goto skipAnim
 			end
 
@@ -126,7 +121,8 @@ function Weapon.Disarm(currentWeapon, noAnim)
 
 		::skipAnim::
 
-		if client.weaponnotify then
+		local inVehicle = GetVehiclePedIsIn(cache.ped, false) ~= 0
+		if client.weaponnotify and not inVehicle then
 			Utils.ItemNotify({ currentWeapon, 'ui_holstered' })
 		end
 

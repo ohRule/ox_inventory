@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDragLayer, useDrop } from 'react-dnd';
-import { HOTBAR_SLOTS, hotbarPlaceholder, resolveHotbarItem } from '../../helpers';
+import { HOTBAR_SLOTS, hotbarPlaceholder, matchHotbarIndex, resolveHotbarItem } from '../../helpers';
 import useNuiEvent from '../../hooks/useNuiEvent';
 import { useAppSelector } from '../../store';
 import { selectIsBusy, selectLeftInventory } from '../../store/inventory';
 import { selectHotbarBinds } from '../../store/hotbar';
+import { Items } from '../../store/items';
 import HotbarSlot from './HotbarSlot';
 import { onUse } from '../../dnd/onUse';
 import { onUnbindHotbar } from '../../dnd/onHotbar';
-import { DragSource, InventoryType } from '../../typings';
+import { DragSource, InventoryType, Slot } from '../../typings';
 import { Locale } from '../../store/locale';
 import { fetchNui } from '../../utils/fetchNui';
 
@@ -62,14 +63,30 @@ const HotbarUnbindZone: React.FC = () => {
   );
 };
 
+const USE_HIGHLIGHT_MS = 500;
+
 interface InventoryHotbarProps {
   /** Inventory is open: enable bind drag/drop, unbind zone, and 1-N use. */
   inventoryOpen?: boolean;
 }
 
+type HotbarBind = { slot: number; name: string; serial?: string };
+type HotbarItemRef = { slot?: number; name?: string; serial?: string };
+type HotbarPressedData = number | { index: number; hold?: boolean };
+
+const isWeaponBind = (index: number, binds: (HotbarBind | null)[], items: Slot[]) => {
+  const item = resolveHotbarItem(binds[index - 1], items);
+  if (!item?.name) return false;
+  if (Items[item.name]?.weapon) return true;
+  return item.name.toUpperCase().startsWith('WEAPON_');
+};
+
 const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false }) => {
   // HUD hotbar stays on unless the player hides it with the toggle / keybind
   const [hotbarVisible, setHotbarVisible] = useState(true);
+  const [usedUntil, setUsedUntil] = useState<number[]>(() => Array.from({ length: HOTBAR_SLOTS }, () => 0));
+  const [equippedIndex, setEquippedIndex] = useState<number | null>(null);
+  const equippedRef = useRef<HotbarItemRef | false>(false);
   const items = useAppSelector(selectLeftInventory).items;
   const binds = useAppSelector(selectHotbarBinds);
   const isBusy = useAppSelector(selectIsBusy);
@@ -79,6 +96,56 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
   });
 
   useNuiEvent<boolean>('setHotbarHud', (visible) => setHotbarVisible(!!visible));
+
+  const pulseBind = (index: number) => {
+    const slot = index - 1;
+    if (slot < 0 || slot >= HOTBAR_SLOTS) return;
+
+    const until = Date.now() + USE_HIGHLIGHT_MS;
+    setUsedUntil((prev) => {
+      const next = [...prev];
+      next[slot] = until;
+      return next;
+    });
+
+    window.setTimeout(() => {
+      setUsedUntil((prev) => {
+        if (prev[slot] !== until) return prev;
+        const next = [...prev];
+        next[slot] = 0;
+        return next;
+      });
+    }, USE_HIGHLIGHT_MS);
+  };
+
+  // Weapons stay lit from the key press until currentWeapon is cleared
+  const holdBind = (index: number) => {
+    const slot = index - 1;
+    if (slot < 0 || slot >= HOTBAR_SLOTS) return;
+
+    const bind = binds[slot];
+    equippedRef.current = bind
+      ? { slot: bind.slot, name: bind.name, serial: bind.serial }
+      : false;
+    setEquippedIndex(slot);
+  };
+
+  useNuiEvent<HotbarPressedData>('hotbarPressed', (data) => {
+    const index = typeof data === 'number' ? data : Number(data?.index);
+    const hold = typeof data === 'object' && !!data?.hold;
+
+    if (hold) holdBind(index);
+    else pulseBind(index);
+  });
+
+  useNuiEvent<HotbarItemRef | false>('hotbarEquipped', (data) => {
+    equippedRef.current = data || false;
+    setEquippedIndex(matchHotbarIndex(binds, items, data));
+  });
+
+  useEffect(() => {
+    setEquippedIndex(matchHotbarIndex(binds, items, equippedRef.current));
+  }, [binds, items]);
 
   const toggleHud = () => {
     const next = !hotbarVisible;
@@ -98,10 +165,13 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
       const index = Number(event.key);
       if (index < 1 || index > HOTBAR_SLOTS) return;
 
+      event.preventDefault();
+      if (isWeaponBind(index, binds, items)) holdBind(index);
+      else pulseBind(index);
+
       const item = resolveHotbarItem(binds[index - 1], items);
       if (!item) return;
 
-      event.preventDefault();
       onUse(item);
     };
 
@@ -129,6 +199,9 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
                 // Keep showing the bound item icon even when it's not in the inventory
                 const item = liveItem ?? (missing ? hotbarPlaceholder(bind) : undefined);
 
+                const now = Date.now();
+                const active = equippedIndex === i || usedUntil[i] > now;
+
                 return (
                   <HotbarSlot
                     key={`hotbar-${index}`}
@@ -136,6 +209,7 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
                     bind={bind}
                     item={item}
                     missing={missing}
+                    active={active}
                     interactive={inventoryOpen}
                   />
                 );

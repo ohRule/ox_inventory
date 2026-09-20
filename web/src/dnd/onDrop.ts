@@ -1,4 +1,4 @@
-import { canStack, findAvailableSlot, getTargetInventory, isSlotWithItem } from '../helpers';
+import { canStack, findAvailableSlot, furnaceAllows, furnaceInputRange, getTargetInventory, isSlotWithItem } from '../helpers';
 import { promptMoveAmount } from '../helpers/amountPrompt';
 import { validateMove } from '../thunks/validateItems';
 import { store } from '../store';
@@ -6,6 +6,7 @@ import { DragSource, DropTarget, InventoryType, Slot, SlotWithItem } from '../ty
 import { moveSlots, stackSlots, swapSlots } from '../store/inventory';
 import { Items } from '../store/items';
 import { Locale } from '../store/locale';
+import { onSell } from './onSell';
 
 const commitDrop = (
   sourceSlot: SlotWithItem,
@@ -70,9 +71,35 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
       return console.log(`Cannot move container ${sourceSlot.name} when opened`);
   }
 
+  const isFurnace = targetInventory.type === InventoryType.FURNACE;
+  const inputLimit = targetInventory.type === InventoryType.RECYCLER ? targetInventory.inputSlots : undefined;
+
+  // Shift-click into recycler input, or the matching furnace tray (ore vs fuel).
+  let searchItems = targetInventory.items;
+  if (!target && inputLimit) {
+    searchItems = targetInventory.items.filter((slot) => slot.slot <= inputLimit);
+  } else if (!target && isFurnace) {
+    const range = furnaceInputRange(targetInventory, sourceSlot.name);
+    if (!range) return;
+    searchItems = targetInventory.items.filter((slot) => slot.slot >= range[0] && slot.slot <= range[1]);
+  }
+
+  if (target && inputLimit && target.item.slot > inputLimit) return;
+
+  // Loot props are take-only
+  if (targetInventory.type === InventoryType.LOOTPROP && sourceInventory.type !== InventoryType.LOOTPROP) return;
+
+  if (isFurnace && target && !furnaceAllows(targetInventory, target.item.slot, sourceSlot.name)) return;
+
+  // Pawn/trader: drag a matching player item onto the listing to sell it
+  if (sourceInventory.type === InventoryType.PLAYER && targetInventory.type === InventoryType.SHOP && (targetInventory.style === 'pawn' || targetInventory.style === 'trader')) {
+    onSell(source, target);
+    return;
+  }
+
   const targetSlot = target
     ? targetInventory.items[target.item.slot - 1]
-    : findAvailableSlot(sourceSlot, sourceData, targetInventory.items);
+    : findAvailableSlot(sourceSlot, sourceData, searchItems);
 
   if (targetSlot === undefined) return console.error('Target slot undefined!');
 
@@ -89,6 +116,11 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
   // Rearranging inside the same inventory always moves the full stack.
   // Amount is only asked when transferring to another inventory.
   if (!isSwap && sourceSlot.count > 1 && sourceInventory.id !== targetInventory.id) {
+    // Research table takes a single item, like Rust.
+    if (targetInventory.type === InventoryType.RESEARCH) {
+      finish(1);
+      return;
+    }
     promptMoveAmount(sourceSlot.count, sourceSlot.count).then((count) => {
       if (count) finish(count);
     });

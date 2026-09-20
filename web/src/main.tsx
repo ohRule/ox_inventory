@@ -27,7 +27,14 @@ if (isEnvBrowser()) {
 
 createRoot(root!).render(
   <React.StrictMode>
-    <MantineProvider forceColorScheme="dark">
+    <MantineProvider
+      forceColorScheme="dark"
+      cssVariablesResolver={() => ({
+        variables: {},
+        light: { '--mantine-color-body': 'transparent' },
+        dark: { '--mantine-color-body': 'transparent' },
+      })}
+    >
       <Provider store={store}>
         <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true }}>
           <ItemNotificationsProvider>

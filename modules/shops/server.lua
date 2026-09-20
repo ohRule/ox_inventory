@@ -10,6 +10,49 @@ local locations = shared.target and 'targets' or 'locations'
 ---@field slot number
 ---@field weight number
 
+--- Merge buyback into shop rows (one icon for buy + sell). Items only in buyback get a sell-only row.
+---@param shop OxShop
+---@param buyback table<string, number>
+---@param buybackCurrency string?
+local function mergeBuybackIntoShop(shop, buyback, buybackCurrency)
+	if type(buyback) ~= 'table' or not next(buyback) then return end
+
+	shop.buybackCurrency = buybackCurrency or 'money'
+	shop.style = shop.style or 'trader'
+
+	local merged = {}
+	local baseSlots = shop.slots or #shop.items
+
+	for i = 1, baseSlots do
+		local slot = shop.items[i]
+		if slot and slot.name then
+			local bb = buyback[slot.name]
+			if bb and bb > 0 then
+				slot.buybackPrice = bb
+				merged[slot.name] = true
+			end
+		end
+	end
+
+	local slot = baseSlots
+	for itemName, price in pairs(buyback) do
+		if price and price > 0 and not merged[itemName] then
+			local Item = Items(itemName)
+			if Item then
+				slot += 1
+				shop.items[slot] = {
+					name = Item.name,
+					slot = slot,
+					weight = Item.weight,
+					metadata = { placeholder = true, price = price },
+				}
+			end
+		end
+	end
+
+	shop.slots = slot
+end
+
 local function setupShopItems(id, shopType, shopName, groups)
 	local shop = id and Shops[shopType][id] or Shops[shopType] --[[@as OxShop]]
 
@@ -30,7 +73,7 @@ local function setupShopItems(id, shopType, shopName, groups)
 				slot = i,
 				weight = Item.weight,
 				count = slot.count,
-				price = (server.randomprices and (not slot.currency or slot.currency == 'money')) and (math.ceil(slot.price * (math.random(80, 120)/100))) or slot.price or 0,
+				price = (server.randomprices and shop.style ~= 'pawn' and shop.style ~= 'trader' and (not slot.currency or slot.currency == 'money')) and (math.ceil(slot.price * (math.random(80, 120)/100))) or slot.price or 0,
 				metadata = slot.metadata,
 				license = slot.license,
 				currency = slot.currency,
@@ -61,9 +104,15 @@ local function registerShopType(shopType, properties)
 			items = properties.inventory,
 			slots = #properties.inventory,
 			type = 'shop',
+			style = properties.style or (properties.buyback and 'trader') or 'shop',
+			buyback = properties.buyback,
+			buybackCurrency = properties.buybackCurrency,
 		}
 
 		setupShopItems(nil, shopType, properties.name, properties.groups or properties.jobs)
+		if properties.buyback then
+			mergeBuybackIntoShop(Shops[shopType], properties.buyback, properties.buybackCurrency)
+		end
 	end
 end
 
@@ -99,11 +148,16 @@ local function createShop(shopType, id)
 		items = table.clone(shop.inventory),
 		slots = #shop.inventory,
 		type = 'shop',
+		style = shop.style or (shop.buyback and 'trader') or 'shop',
+		buybackCurrency = shop.buybackCurrency,
 		coords = coords,
 		distance = shared.target and shop.targets?[id]?.distance,
 	}
 
 	setupShopItems(id, shopType, shop.name, groups)
+	if shop.buyback then
+		mergeBuybackIntoShop(shop[id], shop.buyback, shop.buybackCurrency)
+	end
 
 	return shop[id]
 end
@@ -215,6 +269,10 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
 		local fromData = shop.items[data.fromSlot]
 		local toData = playerInv.items[data.toSlot]
 
+		if shop.style == 'pawn' or fromData?.metadata?.placeholder then
+			return false, false, { type = 'error', description = locale('cannot_perform') }
+		end
+
 		if fromData then
 			if fromData.count then
 				if fromData.count < 1 then
@@ -307,6 +365,98 @@ lib.callback.register('ox_inventory:buyItem', function(source, data)
 	end
 end)
 
+---Sell one player stack by dropping it onto a pawn listing (toSlot = shop row).
+lib.callback.register('ox_inventory:sellItem', function(source, data)
+	local playerInv = Inventory(source)
+
+	if not playerInv or not playerInv.currentShop then return end
+
+	local shopType, shopId = playerInv.currentShop:match('^(.-) (%d-)$')
+	if not shopType then shopType = playerInv.currentShop end
+	if shopId then shopId = tonumber(shopId) end
+
+	local shop = shopId and Shops[shopType][shopId] or Shops[shopType]
+	if not shop or (shop.style ~= 'pawn' and shop.style ~= 'trader') then
+		return false, false, { type = 'error', description = locale('cannot_perform') }
+	end
+
+	data.count = math.max(1, math.floor(data.count or 1))
+
+	local shopItem = shop.items[data.toSlot]
+	local fromData = playerInv.items[data.fromSlot]
+
+	if not shopItem or not fromData or fromData.name ~= shopItem.name then
+		return false, false, { type = 'error', description = locale('cannot_sell') }
+	end
+
+	-- Pawn listings use price; traders use buybackPrice (or placeholder metadata.price)
+	local unitPrice = shop.style == 'pawn' and shopItem.price
+		or shopItem.buybackPrice
+		or (shopItem.metadata and shopItem.metadata.placeholder and shopItem.metadata.price)
+
+	if type(unitPrice) ~= 'number' or unitPrice < 0 then
+		return false, false, { type = 'error', description = locale('cannot_sell') }
+	end
+
+	if shopItem.grade then
+		local _, rank = server.hasGroup(playerInv, shop.groups)
+		if not isRequiredGrade(shopItem.grade, rank) then
+			return false, false, { type = 'error', description = locale('stash_lowgrade') }
+		end
+	end
+
+	if fromData.count < data.count then
+		data.count = fromData.count
+	end
+
+	if data.count < 1 then return false end
+
+	local currency = shop.buybackCurrency or shopItem.currency or 'money'
+	local price = data.count * unitPrice
+	local fromItem = Items(fromData.name)
+	if not fromItem then return false end
+
+	local hooks <close> = TriggerEventHooks('sellItem', {
+		source = source,
+		shopType = shopType,
+		shopId = shopId,
+		fromInventory = playerInv.id,
+		fromSlot = fromData,
+		itemName = fromData.name,
+		count = data.count,
+		price = unitPrice,
+		totalPrice = price,
+		currency = currency,
+	})
+
+	if not hooks.success then return false end
+
+	if not Inventory.RemoveItem(playerInv, fromData.name, data.count, nil, data.fromSlot) then
+		return false, false, { type = 'error', description = locale('item_not_enough', fromItem.label) }
+	end
+
+	local moneyItem
+
+	if price > 0 then
+		local added, response = Inventory.AddItem(playerInv, currency, price)
+		if not added then
+			Inventory.AddItem(playerInv, fromData.name, data.count, fromData.metadata)
+			return false, false, { type = 'error', description = locale('cannot_carry') }
+		end
+		moneyItem = response
+	end
+
+	if server.syncInventory then server.syncInventory(playerInv) end
+
+	local message = locale('sold_for', data.count, fromItem.label, (currency == 'money' and locale('$') or math.groupdigits(price)), (currency == 'money' and math.groupdigits(price) or ' '..Items(currency).label))
+
+	if server.loglevel > 0 then
+		lib.logger(playerInv.owner, 'sellItem', ('"%s" %s'):format(playerInv.label, message:lower()), ('shop:%s'):format(shop.label))
+	end
+
+	return true, { data.fromSlot, playerInv.items[data.fromSlot] or { slot = data.fromSlot }, moneyItem, playerInv.weight }, { type = 'success', description = message }
+end)
+
 ---Purchase every cart line atomically (validate all, then apply all).
 ---@param source number
 ---@param data { items: { fromSlot: number, count: number }[] }
@@ -323,6 +473,9 @@ lib.callback.register('ox_inventory:buyCart', function(source, data)
 
 	local shop = shopId and Shops[shopType][shopId] or Shops[shopType]
 	if not shop then return false end
+	if shop.style == 'pawn' or shop.style == 'trader' then
+		return false, false, { type = 'error', description = locale('cannot_perform') }
+	end
 
 	-- Merge duplicate fromSlot lines from the client
 	local merged = {}
@@ -534,6 +687,150 @@ lib.callback.register('ox_inventory:buyCart', function(source, data)
 	end
 
 	return true, { playerUpdates, shopUpdates, playerInv.weight }, { type = 'success', description = message }
+end)
+
+---Sell every cart line atomically (validate all, then apply all).
+lib.callback.register('ox_inventory:sellCart', function(source, data)
+	local playerInv = Inventory(source)
+
+	if not playerInv or not playerInv.currentShop then return false, false, { type = 'error', description = locale('inventory_right_access') } end
+	if type(data) ~= 'table' or type(data.items) ~= 'table' or #data.items < 1 then return false end
+
+	local shopType, shopId = playerInv.currentShop:match('^(.-) (%d-)$')
+
+	if not shopType then shopType = playerInv.currentShop end
+	if shopId then shopId = tonumber(shopId) end
+
+	local shop = shopId and Shops[shopType][shopId] or Shops[shopType]
+	if not shop or shop.style ~= 'pawn' then return false end
+
+	local merged = {}
+	for i = 1, #data.items do
+		local entry = data.items[i]
+		local fromSlot = tonumber(entry.fromSlot)
+		local count = math.max(1, math.floor(tonumber(entry.count) or 1))
+
+		if fromSlot then
+			merged[fromSlot] = (merged[fromSlot] or 0) + count
+		end
+	end
+
+	local planned = {}
+	local currencyGains = {}
+
+	for fromSlot, count in pairs(merged) do
+		local fromData = shop.items[fromSlot]
+		if not fromData then
+			return false, false, { type = 'error', description = locale('cannot_sell') }
+		end
+
+		if fromData.grade then
+			local _, rank = server.hasGroup(playerInv, shop.groups)
+			if not isRequiredGrade(fromData.grade, rank) then
+				return false, false, { type = 'error', description = locale('stash_lowgrade') }
+			end
+		end
+
+		local fromItem = Items(fromData.name)
+		if not fromItem then return false end
+
+		local owned = Inventory.GetItemCount(playerInv, fromItem.name)
+		if owned < count then
+			return false, false, { type = 'error', description = locale('item_not_enough', fromItem.label) }
+		end
+
+		local currency = fromData.currency or 'money'
+		local price = count * (fromData.price or 0)
+		currencyGains[currency] = (currencyGains[currency] or 0) + price
+
+		planned[#planned + 1] = {
+			fromSlot = fromSlot,
+			fromData = fromData,
+			fromItem = fromItem,
+			count = count,
+			price = price,
+			unitPrice = fromData.price or 0,
+			currency = currency,
+		}
+	end
+
+	if #planned < 1 then return false end
+
+	local playerUpdates = {}
+	local soldLabels = {}
+
+	for i = 1, #planned do
+		local line = planned[i]
+		local hooks <close> = TriggerEventHooks('sellItem', {
+			source = source,
+			shopType = shopType,
+			shopId = shopId,
+			fromInventory = playerInv.id,
+			fromSlot = line.fromData,
+			itemName = line.fromItem.name,
+			count = line.count,
+			price = line.unitPrice,
+			totalPrice = line.price,
+			currency = line.currency,
+		})
+
+		if not hooks.success or not Inventory.RemoveItem(playerInv, line.fromItem.name, line.count) then
+			for j = 1, i - 1 do
+				local prev = planned[j]
+				Inventory.AddItem(playerInv, prev.fromItem.name, prev.count)
+				if prev.price > 0 then
+					Inventory.RemoveItem(playerInv, prev.currency, prev.price)
+				end
+			end
+
+			return false
+		end
+
+		if line.price > 0 then
+			local added, response = Inventory.AddItem(playerInv, line.currency, line.price)
+			if not added then
+				Inventory.AddItem(playerInv, line.fromItem.name, line.count)
+				for j = 1, i - 1 do
+					local prev = planned[j]
+					Inventory.AddItem(playerInv, prev.fromItem.name, prev.count)
+					if prev.price > 0 then
+						Inventory.RemoveItem(playerInv, prev.currency, prev.price)
+					end
+				end
+
+				return false, false, { type = 'error', description = locale('cannot_carry') }
+			end
+
+			if type(response) == 'table' then
+				if response.slot then
+					playerUpdates[#playerUpdates + 1] = { item = response, inventory = playerInv.id }
+				else
+					for k = 1, #response do
+						playerUpdates[#playerUpdates + 1] = { item = response[k], inventory = playerInv.id }
+					end
+				end
+			end
+		end
+
+		soldLabels[#soldLabels + 1] = ('%sx %s'):format(line.count, line.fromItem.label)
+	end
+
+	if server.syncInventory then server.syncInventory(playerInv) end
+
+	local message
+	if #soldLabels == 1 then
+		local line = planned[1]
+		message = locale('sold_for', line.count, line.fromItem.label, (line.currency == 'money' and locale('$') or math.groupdigits(line.price)), (line.currency == 'money' and math.groupdigits(line.price) or ' '..Items(line.currency).label))
+	else
+		local currency, price = next(currencyGains)
+		message = locale('sold_cart', #planned, (currency == 'money' and locale('$') or math.groupdigits(price)), (currency == 'money' and math.groupdigits(price) or ' '..(Items(currency) and Items(currency).label or currency)))
+	end
+
+	if server.loglevel > 0 then
+		lib.logger(playerInv.owner, 'sellCart', ('"%s" %s'):format(playerInv.label, message:lower()), ('shop:%s'):format(shop.label))
+	end
+
+	return true, { playerUpdates, {}, playerInv.weight }, { type = 'success', description = message }
 end)
 
 server.shops = Shops

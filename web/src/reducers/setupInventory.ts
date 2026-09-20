@@ -32,24 +32,35 @@ export const setupInventoryReducer: CaseReducer<
       }),
     };
 
-  if (rightInventory)
+  if (rightInventory) {
+    const items = Array.from(Array(rightInventory.slots), (_, index) => {
+      const item = Object.values(rightInventory.items).find((item) => item?.slot === index + 1) || {
+        slot: index + 1,
+      };
+
+      if (!item.name) return item;
+
+      if (typeof Items[item.name] === 'undefined') {
+        getItemData(item.name);
+      }
+
+      item.durability = itemDurability(item.metadata, curTime);
+      return item;
+    });
+
+    const unlockedSlots: Record<number, boolean> = {};
+    if (rightInventory.type === 'lootprop') {
+      for (const item of items) {
+        if (item.name) unlockedSlots[item.slot] = true;
+      }
+    }
+
     state.rightInventory = {
       ...rightInventory,
-      items: Array.from(Array(rightInventory.slots), (_, index) => {
-        const item = Object.values(rightInventory.items).find((item) => item?.slot === index + 1) || {
-          slot: index + 1,
-        };
-
-        if (!item.name) return item;
-
-        if (typeof Items[item.name] === 'undefined') {
-          getItemData(item.name);
-        }
-
-        item.durability = itemDurability(item.metadata, curTime);
-        return item;
-      }),
+      items,
+      unlockedSlots,
     };
+  }
 
   state.shiftPressed = false;
   state.isBusy = false;

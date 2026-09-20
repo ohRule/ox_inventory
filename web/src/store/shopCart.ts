@@ -43,17 +43,22 @@ const shopCartSlice = createSlice({
         price: number;
         currency?: string;
         maxCount?: number;
+        count?: number;
       }>
     ) => {
       const { shopSlot, name, label, price, currency, maxCount } = action.payload;
+      const addBy = Math.max(1, Math.floor(action.payload.count || 1));
       const existing = state.lines.find((line) => line.shopSlot === shopSlot);
 
       if (existing) {
-        const next = existing.count + 1;
+        const next = existing.count + addBy;
         existing.count = maxCount !== undefined ? Math.min(next, maxCount) : Math.min(next, 99);
         existing.maxCount = maxCount;
         return;
       }
+
+      const start = maxCount !== undefined ? Math.min(addBy, maxCount) : Math.min(addBy, 99);
+      if (start < 1) return;
 
       state.lines.push({
         shopSlot,
@@ -61,7 +66,7 @@ const shopCartSlice = createSlice({
         label,
         price,
         currency,
-        count: 1,
+        count: start,
         maxCount,
       });
     },

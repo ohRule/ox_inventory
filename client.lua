@@ -1,11 +1,34 @@
 if not lib then return end
 
+-- Handshake with NUI immediately so the UI page can load while the rest of this file runs.
+RegisterNUICallback('uiLoaded', function(_, cb)
+	client.uiLoaded = true
+	cb(1)
+end)
+
 require 'modules.bridge.client'
 require 'modules.interface.client'
 
 local Utils = require 'modules.utils.client'
 local Weapon = require 'modules.weapon.client'
+require 'modules.attachments.client'
+require 'modules.dragcraft.client'
 local currentWeapon
+local storedWeaponOnVehicleEntry
+local isReEquippingWeapon = false
+local manuallyHolsteredInVehicle = false
+
+local function weaponUsableInVehicle(hash)
+	local vehicle = GetVehiclePedIsIn(cache.ped, false)
+	if vehicle == 0 then return true end
+
+	local class = GetVehicleClass(vehicle)
+	if class == 8 or class == 13 then return true end
+	if class == 15 and cache.seat and cache.seat > 0 then return true end
+
+	local group = GetWeapontypeGroup(hash)
+	return group == `GROUP_PISTOL` or group == `GROUP_STUNGUN`
+end
 
 exports('getCurrentWeapon', function()
 	return currentWeapon
@@ -47,7 +70,9 @@ local function canOpenInventory()
         return shared.info('cannot open inventory', '(player inventory has not loaded)')
     end
 
-    if IsPauseMenuActive() or invOpen == nil then return end
+    -- Wearables uses an empty pause-menu overlay for the ped preview
+    if invOpen == nil then return end
+    if IsPauseMenuActive() and not client.wearablesPreview then return end
 
     if invBusy or (currentWeapon?.timer or 0) > 0 then
         return shared.info('cannot open inventory', '(is busy)')
@@ -120,6 +145,12 @@ local function closeTrunk()
 end
 
 local CraftingBenches = require 'modules.crafting.client'
+require 'modules.recycler.client'
+require 'modules.furnace.client'
+require 'modules.loot.client'
+require 'modules.ammobox.client'
+require 'modules.magload.client'
+require 'modules.loadout.client'
 local QuickCraft = require 'modules.quickcraft.client'
 local Wearables = require 'modules.wearables.client'
 local Vehicles = lib.load('data.vehicles')
@@ -324,7 +355,11 @@ function client.openInventory(inv, data)
 
             local coords, distance
 
-            if not right.zones and not right.points then
+            if right.locations and right.locations[data.index] then
+                local loc = right.locations[data.index]
+                coords = (type(loc) == 'table' and loc.coords) or loc
+                distance = 2
+            elseif not right.zones and not right.points then
                 coords = GetEntityCoords(cache.ped)
                 distance = 2
             else
@@ -332,17 +367,31 @@ function client.openInventory(inv, data)
                 distance = coords and shared.target and right.zones[data.index].distance or 2
             end
 
+            local benchData = lib.callback.await('ox_inventory:getCraftingBenchData', 200, data.id, data.index)
+
             right = {
                 type = 'crafting',
                 id = data.id,
-                label = right.label or locale('crafting_bench'),
+                label = (benchData and benchData.label) or right.label or locale('crafting_bench'),
                 index = data.index,
-                slots = right.slots,
-                items = right.items,
+                slots = (benchData and benchData.slots) or right.slots,
+                items = (benchData and benchData.items) or right.items,
                 coords = coords,
-                distance = distance
+                distance = distance,
+                techTree = benchData and benchData.techTree or false,
+                unlockScrapItem = benchData and benchData.unlockScrapItem,
+                treeRootSlots = benchData and benchData.treeRootSlots,
+                treeChildren = benchData and benchData.treeChildren,
             }
         end
+    elseif inv == 'recycler' or inv == 'lootprop' or inv == 'research' or inv == 'furnace' then
+        if cache.vehicle then
+            return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
+        end
+
+        left, right, accessError = lib.callback.await('ox_inventory:openInventory', false, inv, data)
+    elseif inv == 'armoury' then
+        left, right, accessError = lib.callback.await('ox_inventory:openInventory', false, inv, data)
     elseif invOpen ~= nil then
         if inv == 'policeevidence' then
             if not data then
@@ -585,6 +634,28 @@ AddEventHandler('ox_inventory:usedItem', function(name, slot, metadata)
     TriggerServerEvent('ox_inventory:usedItemInternal', slot)
 end)
 
+-- Ignore the disarm event that happens while swapping to another weapon
+local skipHotbarUnequip = false
+
+local function sendHotbarEquipped(ref)
+	SendNUIMessage({
+		action = 'hotbarEquipped',
+		data = (ref and ref.name) and {
+			slot = ref.slot,
+			name = ref.name,
+			serial = ref.serial or (ref.metadata and ref.metadata.serial) or nil,
+		} or false
+	})
+end
+
+AddEventHandler('ox_inventory:currentWeapon', function(weapon)
+	-- Keep the hotbar lit when GTA disarms us for a vehicle; we re-equip on exit
+	if not weapon and skipHotbarUnequip then return end
+	if not weapon and storedWeaponOnVehicleEntry and GetVehiclePedIsIn(cache.ped, false) ~= 0 then return end
+
+	sendHotbarEquipped(weapon)
+end)
+
 AddEventHandler('ox_inventory:item', useItem)
 exports('useItem', useItem)
 
@@ -638,20 +709,87 @@ local function useSlot(slot, noAnim)
 
 			if IsCinematicCamRendering() then SetCinematicModeActive(false) end
 
+			local inVehicle = GetVehiclePedIsIn(cache.ped, false) ~= 0
+			if inVehicle and not currentWeapon and storedWeaponOnVehicleEntry and data.slot == storedWeaponOnVehicleEntry.slot then
+				storedWeaponOnVehicleEntry = nil
+				manuallyHolsteredInVehicle = true
+				if client.weaponnotify then
+					Utils.ItemNotify({ item, 'ui_holstered' })
+				end
+				sendHotbarEquipped(false)
+				return
+			end
+
+			if inVehicle and not isReEquippingWeapon then
+				local equipped = lib.progressBar({
+					duration = 3000,
+					label = locale('using', item.metadata.label or data.label),
+					useWhileDead = false,
+					canCancel = true,
+					disable = { combat = true },
+				})
+
+				if not equipped then
+					sendHotbarEquipped(storedWeaponOnVehicleEntry or false)
+					return
+				end
+			end
+
 			if currentWeapon then
                 if not currentWeapon.timer or currentWeapon.timer ~= 0 then return end
 
 				local weaponSlot = currentWeapon.slot
-				currentWeapon = Weapon.Disarm(currentWeapon)
+				local wasInVehicle = GetVehiclePedIsIn(cache.ped, false) ~= 0
 
-				if weaponSlot == data.slot then return end
+				if weaponSlot == data.slot then
+					storedWeaponOnVehicleEntry = nil
+					if wasInVehicle then
+						manuallyHolsteredInVehicle = true
+						if client.weaponnotify then
+							Utils.ItemNotify({ currentWeapon, 'ui_holstered' })
+						end
+					end
+				end
+
+				local switching = weaponSlot ~= data.slot
+				if switching then skipHotbarUnequip = true end
+				currentWeapon = Weapon.Disarm(currentWeapon)
+				skipHotbarUnequip = false
+
+				if not switching then return end
+			end
+
+			manuallyHolsteredInVehicle = false
+
+			if inVehicle then
+				if storedWeaponOnVehicleEntry and storedWeaponOnVehicleEntry.slot ~= data.slot then
+					RemoveAllPedWeapons(cache.ped, true)
+				end
+
+				storedWeaponOnVehicleEntry = {
+					slot = data.slot,
+					name = item.name,
+					hash = data.hash,
+					serial = item.metadata and item.metadata.serial or nil,
+				}
+				sendHotbarEquipped(storedWeaponOnVehicleEntry)
+
+				-- Rifles/etc can't be held in a car — store them for exit without putting them in-hand
+				if not weaponUsableInVehicle(data.hash) then
+					if client.weaponnotify then
+						Utils.ItemNotify({ item, 'ui_equipped' })
+					end
+					return
+				end
 			end
 
             GiveWeaponToPed(playerPed, data.hash, 0, false, true)
             SetCurrentPedWeapon(playerPed, data.hash, false)
 
-            if data.hash ~= GetSelectedPedWeapon(playerPed) then
+            -- GTA will not report rifles/etc as selected while seated; skip the fail-out so you can still ready a gun in a car
+            if not inVehicle and data.hash ~= GetSelectedPedWeapon(playerPed) then
                 lib.print.info(('failed to equip %s (cause unknown)'):format(item.name))
+				SendNUIMessage({ action = 'hotbarEquipped', data = false })
                 return lib.notify({ type = 'error', description = locale('cannot_use', data.label) })
             end
 
@@ -660,14 +798,72 @@ local function useSlot(slot, noAnim)
 			useItem(data, function(result)
 				if result then
                     local sleep
-					currentWeapon, sleep = Weapon.Equip(item, data, noAnim)
+					currentWeapon, sleep = Weapon.Equip(item, data, noAnim, isReEquippingWeapon)
 
 					if sleep then Wait(sleep) end
 				end
 			end, noAnim)
+
+			-- useItem only runs its callback on success; keep the stored/readied bind lit in a vehicle
+			if not currentWeapon and not storedWeaponOnVehicleEntry then
+				sendHotbarEquipped(false)
+			elseif storedWeaponOnVehicleEntry and not currentWeapon then
+				sendHotbarEquipped(storedWeaponOnVehicleEntry)
+			end
 		elseif currentWeapon then
 			if data.ammo then
 				if EnableWeaponWheel or (shared.durability and currentWeapon.metadata.durability <= 0) then return end
+
+				local weaponItem = Items[currentWeapon.name]
+				local useMagazine = weaponItem and (weaponItem.useMagazine or weaponItem.usesMagazine)
+				local magazineItem = weaponItem and weaponItem.ammoname
+				local isShotgun = currentWeapon.group == `GROUP_SHOTGUN` or (magazineItem and magazineItem:find('shotgun'))
+
+				-- 1 magazine item = full clip; shotguns still load shell-by-shell
+				if useMagazine and data.name == magazineItem and not isShotgun then
+					useItem(data, function(resp)
+						if not resp or resp.name ~= magazineItem then return end
+
+						local clipSize = GetMaxAmmoInClip(playerPed, currentWeapon.hash, true)
+						local currentAmmo = GetAmmoInPedWeapon(playerPed, currentWeapon.hash)
+						local _, maxAmmo = GetMaxAmmo(playerPed, currentWeapon.hash)
+
+						if maxAmmo < clipSize then clipSize = maxAmmo end
+						if currentAmmo >= clipSize then return end
+
+						local newAmmo = clipSize
+						AddAmmoToPed(playerPed, currentWeapon.hash, newAmmo - currentAmmo)
+
+						if cache.vehicle then
+							if cache.seat > -1 or IsVehicleStopped(cache.vehicle) then
+								TaskReloadWeapon(playerPed, true)
+							else
+								lib.waitFor(function()
+									RefillAmmoInstantly(playerPed)
+									local _, ammo = GetAmmoInClip(playerPed, currentWeapon.hash)
+									return ammo == newAmmo or nil
+								end)
+							end
+						else
+							Wait(100)
+							MakePedReload(playerPed)
+
+							SetTimeout(100, function()
+								while IsPedReloading(playerPed) do
+									DisableControlAction(0, 22, true)
+									Wait(0)
+								end
+							end)
+						end
+
+						lib.callback.await('ox_inventory:updateWeapon', false, 'loadMagazine', newAmmo, false, currentWeapon.metadata.specialAmmo)
+					end)
+					return
+				end
+
+				if useMagazine and not isShotgun and data.name ~= magazineItem then
+					return
+				end
 
 				local clipSize = GetMaxAmmoInClip(playerPed, currentWeapon.hash, true)
 				local currentAmmo = GetAmmoInPedWeapon(playerPed, currentWeapon.hash)
@@ -898,7 +1094,9 @@ local function registerCommands()
 
 			if closest and closest.currentDistance < 1.2 and (not closest.instance or closest.instance == currentInstance) then
 				if closest.inv == 'crafting' then
-					return client.openInventory('crafting', { id = closest.id, index = closest.index })
+					return client.openInventory('crafting', { id = closest.id or closest.benchid, index = closest.index })
+				elseif closest.inv == 'research' then
+					return client.openInventory('research', { id = closest.id or closest.benchid, index = closest.index })
 				elseif closest.inv ~= 'license' and closest.inv ~= 'policeevidence' then
 					return client.openInventory(closest.inv or 'drop', { id = closest.invId, type = closest.type })
 				end
@@ -990,6 +1188,9 @@ local function registerCommands()
 			onPressed = function()
 				if invOpen or EnableWeaponWheel or not invHotkeys or IsNuiFocused() then return end
 				local slot = resolveHotbarSlot(i)
+				local bound = slot and PlayerData.inventory[slot]
+				local hold = bound and Items[bound.name] and Items[bound.name].weapon
+				SendNUIMessage({ action = 'hotbarPressed', data = { index = i, hold = hold and true or false } })
 				if slot then useSlot(slot) end
 			end
 		})
@@ -1306,7 +1507,129 @@ end)
 
 lib.onCache('vehicle', function()
 	if invOpen and (not currentInventory.entity or currentInventory.entity == cache.vehicle) then
-		return client.closeInventory()
+		client.closeInventory()
+	end
+end)
+
+-- Store the equipped weapon on entry; re-equip the same frame we leave (no wait-for-task delay)
+CreateThread(function()
+	local wasInVehicle = GetVehiclePedIsIn(cache.ped, false) ~= 0
+	local justExitedVehicle = false
+	local isInVehicle = wasInVehicle
+
+	while true do
+		Wait(isInVehicle and 0 or 50)
+
+		local vehicle = GetVehiclePedIsIn(cache.ped, false)
+		isInVehicle = vehicle ~= 0
+
+		if not isInVehicle and wasInVehicle then
+			justExitedVehicle = true
+			if storedWeaponOnVehicleEntry and not manuallyHolsteredInVehicle then
+				local slot = storedWeaponOnVehicleEntry.slot
+				local storedName = storedWeaponOnVehicleEntry.name
+
+				isReEquippingWeapon = true
+
+				CreateThread(function()
+					if GetVehiclePedIsIn(cache.ped, false) ~= 0 then
+						isReEquippingWeapon = false
+						storedWeaponOnVehicleEntry = nil
+						return
+					end
+
+					if not PlayerData or not PlayerData.inventory then
+						isReEquippingWeapon = false
+						storedWeaponOnVehicleEntry = nil
+						return
+					end
+
+					local item = PlayerData.inventory[slot]
+					if not item or item.name ~= storedName then
+						isReEquippingWeapon = false
+						storedWeaponOnVehicleEntry = nil
+						return
+					end
+
+					local data = Items[storedName]
+					if not data or not data.weapon then
+						isReEquippingWeapon = false
+						storedWeaponOnVehicleEntry = nil
+						return
+					end
+
+					local selected = GetSelectedPedWeapon(cache.ped)
+					if selected == data.hash or (currentWeapon and currentWeapon.hash == data.hash and currentWeapon.slot == slot) then
+						isReEquippingWeapon = false
+						storedWeaponOnVehicleEntry = nil
+						justExitedVehicle = false
+						manuallyHolsteredInVehicle = false
+						return
+					end
+
+					if currentWeapon then
+						skipHotbarUnequip = true
+						currentWeapon = Weapon.Disarm(currentWeapon, true)
+						skipHotbarUnequip = false
+						currentWeapon = nil
+					end
+					RemoveAllPedWeapons(cache.ped, true)
+
+					data.slot = slot
+					currentWeapon = Weapon.Equip(item, data, true, true)
+					TriggerServerEvent('ox_inventory:vehicleExitReequipWeapon', slot)
+
+					isReEquippingWeapon = false
+					storedWeaponOnVehicleEntry = nil
+					justExitedVehicle = false
+					manuallyHolsteredInVehicle = false
+				end)
+			else
+				justExitedVehicle = false
+				manuallyHolsteredInVehicle = false
+			end
+		end
+
+		if not isInVehicle and not justExitedVehicle then
+			if manuallyHolsteredInVehicle then
+				manuallyHolsteredInVehicle = false
+			end
+
+			if currentWeapon then
+				if not storedWeaponOnVehicleEntry or storedWeaponOnVehicleEntry.slot ~= currentWeapon.slot then
+					storedWeaponOnVehicleEntry = {
+						slot = currentWeapon.slot,
+						name = currentWeapon.name,
+						hash = currentWeapon.hash
+					}
+				end
+			elseif not isReEquippingWeapon then
+				storedWeaponOnVehicleEntry = nil
+			end
+		end
+
+		if isInVehicle and not wasInVehicle then
+			local canShootFromVehicle = false
+			if vehicle ~= 0 then
+				local vehicleClass = GetVehicleClass(vehicle)
+				local seatIndex = cache.seat
+				if vehicleClass == 15 and seatIndex and seatIndex > 0 then
+					canShootFromVehicle = true
+				end
+			end
+
+			if not canShootFromVehicle and not storedWeaponOnVehicleEntry and currentWeapon then
+				storedWeaponOnVehicleEntry = {
+					slot = currentWeapon.slot,
+					name = currentWeapon.name,
+					hash = currentWeapon.hash
+				}
+			end
+
+			manuallyHolsteredInVehicle = false
+		end
+
+		wasInVehicle = isInVehicle
 	end
 end)
 
@@ -1355,7 +1678,8 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			description = v.description,
 			buttons = buttons,
 			ammoName = v.ammoname,
-			image = v.client?.image
+			image = v.client?.image,
+			weapon = v.weapon,
 		}
 	end
 
@@ -1546,7 +1870,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			if weaponHash ~= currentWeapon.hash and currentWeapon.timer then
 				local weaponCount = Items[currentWeapon.name]?.count
 
-				if weaponCount > 0 then
+				if weaponCount and weaponCount > 0 then
 					SetCurrentPedWeapon(playerPed, currentWeapon.hash, true)
 					SetAmmoInClip(playerPed, currentWeapon.hash, currentWeapon.metadata.ammo)
 					SetPedCurrentWeaponVisible(playerPed, true, false, false, false)
@@ -1554,9 +1878,32 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 					weaponHash = GetSelectedPedWeapon(playerPed)
 				end
 
-				if weaponHash ~= currentWeapon.hash then
-                    lib.print.info(('%s was forcibly unequipped (caused by game behaviour or another resource)'):format(currentWeapon.name))
-					currentWeapon = Weapon.Disarm(currentWeapon, true)
+				if weaponHash ~= currentWeapon.hash and not isReEquippingWeapon then
+					local canShootFromVehicle = false
+					if cache.vehicle then
+						local vehicleClass = GetVehicleClass(cache.vehicle)
+						if vehicleClass == 15 and cache.seat and cache.seat > 0 then
+							canShootFromVehicle = true
+						end
+					end
+
+					if not canShootFromVehicle then
+						if cache.vehicle or (not cache.vehicle and not storedWeaponOnVehicleEntry) then
+							if currentWeapon.group ~= `GROUP_PISTOL` and currentWeapon.group ~= `GROUP_STUNGUN` then
+								if not storedWeaponOnVehicleEntry or storedWeaponOnVehicleEntry.slot ~= currentWeapon.slot then
+									storedWeaponOnVehicleEntry = {
+										slot = currentWeapon.slot,
+										name = currentWeapon.name,
+										hash = currentWeapon.hash,
+										serial = currentWeapon.metadata and currentWeapon.metadata.serial or nil,
+									}
+									sendHotbarEquipped(storedWeaponOnVehicleEntry)
+								end
+							end
+						end
+
+						currentWeapon = Weapon.Disarm(currentWeapon, true)
+					end
 				end
 			end
 		elseif client.weaponmismatch and not client.ignoreweapons[weaponHash] then
@@ -1591,10 +1938,15 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 				EnableControlAction(0, EnableKeys[i], true)
 			end
 
-			if currentInventory.type == 'drop' or currentInventory.type == 'newdrop' then
-				EnableControlAction(0, 30, true)
-				EnableControlAction(0, 31, true)
-			end
+			-- Keep the ped still even if enablekeys / drop UI would restore WASD
+			DisableControlAction(0, 30, true)
+			DisableControlAction(0, 31, true)
+			DisableControlAction(0, 21, true)
+			DisableControlAction(0, 22, true)
+			DisableControlAction(0, 32, true)
+			DisableControlAction(0, 33, true)
+			DisableControlAction(0, 34, true)
+			DisableControlAction(0, 35, true)
 		else
 			if invBusy then
 				DisableControlAction(0, 23, true)
@@ -1966,8 +2318,23 @@ RegisterNUICallback('useButton', function(data, cb)
 end)
 
 RegisterNUICallback('exit', function(_, cb)
+	-- Activating the wearables pause overlay can inject Escape into NUI
+	if Wearables.ShouldIgnoreExit() then
+		cb(1)
+		return
+	end
 	client.closeInventory()
 	cb(1)
+end)
+
+RegisterNUICallback('toggleRecycler', function(data, cb)
+	local success, running, process = lib.callback.await('ox_inventory:toggleRecycler', false, data and data.running)
+	cb({ success = success, running = running, process = process })
+end)
+
+RegisterNUICallback('toggleFurnace', function(data, cb)
+	local success, running, process = lib.callback.await('ox_inventory:toggleFurnace', false, data and data.running)
+	cb({ success = success, running = running, process = process })
 end)
 
 lib.callback.register('ox_inventory:startCrafting', function(id, recipe)
@@ -2091,6 +2458,39 @@ RegisterNUICallback('buyItem', function(data, cb)
 	cb(response)
 end)
 
+-- Drag a player stack onto a pawn listing (classic shop grid, no cart)
+RegisterNUICallback('sellItem', function(data, cb)
+	---@type boolean, false | { [1]: number, [2]: SlotWithItem | { slot: number }, [3]: SlotWithItem | table | false, [4]: number}, NotifyProps
+	local response, payload, message = lib.callback.await('ox_inventory:sellItem', 100, data)
+
+	if payload then
+		local updates = {
+			{
+				item = payload[2],
+				inventory = cache.serverId
+			}
+		}
+
+		if payload[3] then
+			if payload[3].slot then
+				updates[#updates + 1] = { item = payload[3], inventory = cache.serverId }
+			elseif type(payload[3]) == 'table' then
+				for i = 1, #payload[3] do
+					updates[#updates + 1] = { item = payload[3][i], inventory = cache.serverId }
+				end
+			end
+		end
+
+		updateInventory(updates, payload[4])
+	end
+
+	if message then
+		lib.notify(message)
+	end
+
+	cb(response or false)
+end)
+
 -- Atomic multi-item shop checkout (cart)
 RegisterNUICallback('buyCart', function(data, cb)
 	---@type boolean, false | { [1]: table, [2]: table, [3]: number }, NotifyProps
@@ -2118,6 +2518,39 @@ RegisterNUICallback('buyCart', function(data, cb)
 	cb(response or false)
 end)
 
+RegisterNUICallback('sellCart', function(data, cb)
+	---@type boolean, false | { [1]: table, [2]: table, [3]: number }, NotifyProps
+	local response, payload, message = lib.callback.await('ox_inventory:sellCart', 100, data)
+
+	if payload then
+		local playerUpdates, shopUpdates, weight = payload[1], payload[2], payload[3]
+
+		if playerUpdates and #playerUpdates > 0 then
+			updateInventory(playerUpdates, weight)
+		elseif weight then
+			client.setPlayerData('weight', weight)
+		end
+
+		if shopUpdates and #shopUpdates > 0 then
+			SendNUIMessage({
+				action = 'refreshSlots',
+				data = { items = shopUpdates }
+			})
+		end
+	end
+
+	if message then
+		lib.notify(message)
+	end
+
+	cb(response or false)
+end)
+
+RegisterNUICallback('notify', function(data, cb)
+	cb(1)
+	if type(data) == 'table' then lib.notify(data) end
+end)
+
 RegisterNUICallback('craftItem', function(data, cb)
 	cb(true)
 
@@ -2135,6 +2568,28 @@ RegisterNUICallback('craftItem', function(data, cb)
 	if currentInventory.type ~= 'crafting' then
 		client.openInventory('crafting', { id = id, index = index })
 	end
+end)
+
+RegisterNUICallback('unlockCraftRecipe', function(data, cb)
+	local id, index = currentInventory.id, currentInventory.index
+	local success = lib.callback.await('ox_inventory:unlockCraftRecipe', 200, id, data.recipeSlot, data.method)
+	if success then
+		client.openInventory('crafting', { id = id, index = index })
+	else
+		lib.notify({ type = 'error', description = locale('recipe_locked') })
+	end
+	cb(success and true or false)
+end)
+
+RegisterNUICallback('researchCraftRecipe', function(_, cb)
+	local benchId, index = currentInventory.benchId, currentInventory.index
+	local success, err = lib.callback.await('ox_inventory:researchCraftRecipe', 200)
+	if success then
+		client.openInventory('research', { id = benchId, index = index })
+	else
+		lib.notify({ type = 'error', description = locale(err or 'recipe_locked') })
+	end
+	cb(success and true or false)
 end)
 
 -- Quick craft from the inventory panel (independent of crafting benches)

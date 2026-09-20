@@ -138,6 +138,30 @@ return {
 		weight = 160,
 	},
 
+	['blueprint_bandage'] = {
+		label = 'Bandage Blueprint',
+		weight = 10,
+		stack = true,
+	},
+
+	['blueprint_medikit'] = {
+		label = 'Medikit Blueprint',
+		weight = 10,
+		stack = true,
+	},
+
+	['blueprint_ammo-9'] = {
+		label = '9mm Blueprint',
+		weight = 10,
+		stack = true,
+	},
+
+	['blueprint_ammo-rifle'] = {
+		label = 'Rifle Ammo Blueprint',
+		weight = 10,
+		stack = true,
+	},
+
 	['phone'] = {
 		label = 'Phone',
 		weight = 190,

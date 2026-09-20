@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import useNuiEvent from '../../hooks/useNuiEvent';
 import InventoryHotbar from './InventoryHotbar';
 import { useAppDispatch, useAppSelector } from '../../store';
-import { refreshSlots, setAdditionalMetadata, setupInventory } from '../../store/inventory';
+import { refreshSlots, setAdditionalMetadata, setupInventory, unlockLootSlot } from '../../store/inventory';
 import { useExitListener } from '../../hooks/useExitListener';
 import type { Inventory as InventoryProps } from '../../typings';
 import RightInventory from './RightInventory';
@@ -35,7 +35,7 @@ const Inventory: React.FC = () => {
     if (mode !== 'inventory' && !navPanels[mode]) return;
 
     setRightPanelMode(mode);
-    // Client starts/stops the wearables ped camera from this
+    // Client starts/stops the wearables pause-menu ped from this
     fetchNui('setRightPanelMode', { mode });
   };
 
@@ -69,6 +69,10 @@ const Inventory: React.FC = () => {
   });
 
   useNuiEvent('refreshSlots', (data) => dispatch(refreshSlots(data)));
+
+  useNuiEvent<{ slot: number }>('lootSearch', (data) => {
+    if (data?.slot) dispatch(unlockLootSlot(data.slot));
+  });
 
   useNuiEvent('setupHotbar', (data: HotbarPayload) => {
     dispatch(setupHotbar(data));

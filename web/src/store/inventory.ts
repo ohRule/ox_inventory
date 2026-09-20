@@ -62,6 +62,13 @@ export const inventorySlice = createSlice({
 
       container.weight = action.payload;
     },
+    unlockLootSlot: (state, action: PayloadAction<number>) => {
+      if (state.rightInventory.type !== 'lootprop') return;
+      state.rightInventory.unlockedSlots = {
+        ...(state.rightInventory.unlockedSlots || {}),
+        [action.payload]: true,
+      };
+    },
   },
   extraReducers: (builder) => {
     builder.addMatcher(isPending, (state) => {
@@ -95,6 +102,7 @@ export const {
   stackSlots,
   refreshSlots,
   setContainerWeight,
+  unlockLootSlot,
 } = inventorySlice.actions;
 export const selectLeftInventory = (state: RootState) => state.inventory.leftInventory;
 export const selectRightInventory = (state: RootState) => state.inventory.rightInventory;

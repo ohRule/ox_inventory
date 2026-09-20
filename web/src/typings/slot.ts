@@ -15,9 +15,17 @@ export type SlotWithItem = Slot & {
   weight: number;
   durability?: number;
   price?: number;
+  /** Trader: payout per unit when selling this item to the shop */
+  buybackPrice?: number;
   currency?: string;
   ingredients?: { [key: string]: number };
   duration?: number;
   image?: string;
   grade?: number | number[];
+  locked?: boolean;
+  unlocked?: boolean;
+  unlockItem?: { name: string; count?: number };
+  unlockScrap?: number;
+  researchScrap?: number;
+  previousItem?: string;
 };

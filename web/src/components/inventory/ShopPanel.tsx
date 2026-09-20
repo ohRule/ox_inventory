@@ -128,7 +128,6 @@ const ShopPanel: React.FC = () => {
     dispatch(bindShopCart(shop.id ? String(shop.id) : null));
   }, [dispatch, shop.id]);
 
-  // Keep cart qty within live shop stock after refreshSlots
   useEffect(() => {
     for (const line of lines) {
       const shopItem = shop.items.find((entry) => entry.slot === line.shopSlot);

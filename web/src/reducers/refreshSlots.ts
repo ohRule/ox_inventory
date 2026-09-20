@@ -27,6 +27,11 @@ export const refreshSlotsReducer: CaseReducer<State, PayloadAction<Payload>> = (
             : state.leftInventory
           : state.leftInventory;
 
+        // Ignore crate updates for slots this player has not searched yet
+        if (targetInventory.type === InventoryType.LOOTPROP && !targetInventory.unlockedSlots?.[data.item.slot]) {
+          return;
+        }
+
         data.item.durability = itemDurability(data.item.metadata, curTime);
         targetInventory.items[data.item.slot - 1] = data.item;
       });

@@ -16,11 +16,13 @@ interface Props {
   item?: SlotWithItem;
   /** Bound item is not currently in the inventory */
   missing?: boolean;
+  /** Used recently or currently equipped */
+  active?: boolean;
   /** Bind drag/drop and tooltips only while inventory is open. */
   interactive?: boolean;
 }
 
-const HotbarSlot: React.FC<Props> = ({ index, bind, item, missing = false, interactive = false }) => {
+const HotbarSlot: React.FC<Props> = ({ index, bind, item, missing = false, active = false, interactive = false }) => {
   const dispatch = useAppDispatch();
   const timerRef = useRef<number | null>(null);
   const leftItems = useAppSelector(selectLeftInventory).items;
@@ -101,7 +103,9 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, missing = false, inter
       ref={connectRef}
       onContextMenu={handleContext}
       onClick={handleClick}
-      className={`hotbar-item-slot${missing ? ' hotbar-item-slot-missing' : ''}`}
+      className={`hotbar-item-slot${missing ? ' hotbar-item-slot-missing' : ''}${
+        active ? ' hotbar-item-slot-active' : ''
+      }`}
       style={{
         opacity: isDragging ? 0.4 : 1.0,
         backgroundImage: `url(${iconUrl || 'none'}`,

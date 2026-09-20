@@ -212,6 +212,8 @@ function Utils.nearbyMarker(point)
                     client.openInventory('policeevidence')
                 elseif point.inv == 'crafting' then
                     client.openInventory('crafting', { id = point.benchid, index = point.index })
+                elseif point.inv == 'research' then
+                    client.openInventory('research', { id = point.benchid, index = point.index })
                 else
                     client.openInventory(point.inv or 'drop', { id = point.invId, type = point.type })
                 end

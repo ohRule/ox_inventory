@@ -29,6 +29,21 @@ $panelHeight: calc(#{$gridHeaderHeight} + #{$gridHeaderGap} + #{$containerSize})
   --inv-hotbar-scale: 1;
   --inv-slot-bg: rgba(var(--inv-panel-rgb), var(--inv-panel-alpha));
   --inv-highlight-bg: rgba(var(--inv-highlight), 0.55);
+  // Mantine dark scheme otherwise paints the whole NUI canvas grey
+  --mantine-color-body: transparent;
+}
+
+html,
+body,
+#root,
+.app-wrapper {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html {
+  // `color-scheme: dark` from Mantine makes CEF fill the page with grey
+  color-scheme: normal !important;
 }
 
 body {
@@ -39,7 +54,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   height: 100vh;
-  background: none !important;
   overflow: hidden !important;
   user-select: none;
 }
@@ -693,6 +707,12 @@ body.inv-dragging {
   height: $gridSize;
 }
 
+.hotbar-item-slot-active {
+  border-color: rgba(var(--inv-highlight), 0.95);
+  background-color: var(--inv-highlight-bg);
+  box-shadow: inset 0 0 0 0.12vh rgba(var(--inv-highlight), 0.8), 0 0 0.7vh rgba(var(--inv-highlight), 0.35);
+}
+
 // Interactive hotbar (inventory open): sized wrappers around InventorySlot
 .hotbar-slot {
   width: $gridSize;
@@ -895,6 +915,12 @@ body.inv-dragging {
 
   .shop-slot {
     box-sizing: border-box;
+  }
+
+  .shop-slot-over,
+  &.shop-panel-over {
+    outline: 0.15vh dashed rgba(46, 204, 113, 0.55);
+    outline-offset: -0.15vh;
   }
 
   .shop-cart {
@@ -1159,7 +1185,7 @@ body.inv-dragging {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  // Keep this transparent so the scripted ped cam shows through
+  // Keep this transparent so the pause-menu ped shows through
   background: transparent;
   pointer-events: none;
 }
@@ -1509,5 +1535,539 @@ body.inv-dragging {
 
   &:active {
     transform: none;
+  }
+}
+
+.inventory-slot-busy {
+  border-color: rgba(var(--inv-highlight), 0.85) !important;
+  box-shadow: inset 0 0 0.9vh rgba(var(--inv-highlight), 0.4);
+}
+
+.inventory-slot-searching {
+  border-color: rgba(var(--inv-highlight), 0.9) !important;
+  animation: loot-search-pulse 0.55s ease-in-out infinite;
+}
+
+.inventory-slot-reveal {
+  animation: loot-reveal 0.45s ease-out;
+}
+
+@keyframes loot-search-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0.4vh rgba(var(--inv-highlight), 0.15);
+  }
+  50% {
+    box-shadow: inset 0 0 1.2vh rgba(var(--inv-highlight), 0.55);
+  }
+}
+
+@keyframes loot-reveal {
+  from {
+    background-size: 3.2vh;
+    filter: brightness(1.8);
+  }
+  to {
+    background-size: 6.4vh;
+    filter: brightness(1);
+  }
+}
+
+// Rust-style recycler: input grid, ON/OFF + progress, output grid
+.recycler-panel {
+  .recycler-header {
+    height: $gridHeaderHeight;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .recycler-title {
+    margin: 0;
+    font-family: $mainFont;
+    font-size: 1.5vh;
+    font-weight: 600;
+    color: $textColor;
+  }
+
+  .recycler-section-label {
+    margin: 0;
+    font-family: $mainFont;
+    font-size: 1.15vh;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(232, 232, 232, 0.55);
+    flex-shrink: 0;
+  }
+
+  .recycler-grid {
+    display: grid;
+    grid-template-columns: repeat(3, $gridSize);
+    grid-auto-rows: $gridSize;
+    gap: $gridGap;
+    width: calc(3 * #{$gridSize} + 2 * #{$gridGap});
+    flex-shrink: 0;
+  }
+
+  .recycler-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55vh;
+    flex: 1 1 auto;
+    min-height: 8vh;
+    justify-content: center;
+  }
+
+  .recycler-toggle {
+    align-self: center;
+    min-width: 14vh;
+    padding: 0.85vh 2vh;
+    border: 1px solid $slotBorder;
+    border-radius: $slotRadius;
+    background-color: var(--inv-slot-bg);
+    color: $textColor;
+    font-family: $mainFont;
+    font-size: 1.6vh;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+
+    &:hover {
+      background-color: $secondaryColorHighlight;
+    }
+  }
+
+  .recycler-toggle-on {
+    background-color: rgba(46, 204, 113, 0.35);
+    border-color: rgba(46, 204, 113, 0.8);
+    color: #d8ffe8;
+  }
+
+  .recycler-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6vh;
+    min-height: 2.2vh;
+  }
+
+  .recycler-status-icon {
+    width: 2.2vh;
+    height: 2.2vh;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    flex-shrink: 0;
+  }
+
+  .recycler-status-text {
+    font-family: $mainFont;
+    font-size: 1.2vh;
+    color: rgba(232, 232, 232, 0.75);
+    text-align: center;
+  }
+
+  .recycler-progress {
+    height: 0.7vh;
+    border-radius: 0.35vh;
+    background-color: rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    border: 1px solid $slotBorder;
+  }
+
+  .recycler-progress-fill {
+    height: 100%;
+    background-color: rgb(var(--inv-highlight));
+    transition: width 50ms linear;
+  }
+}
+
+$techtree-connector: rgba($textColor, 0.35);
+$techtree-node-border: $slotBorder;
+
+.crafting-panel--techtree {
+  .crafting-panel-header {
+    height: $gridHeaderHeight;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    p {
+      font-size: 1.35vh;
+      font-family: $mainFont;
+      color: $textColor;
+    }
+  }
+}
+
+.crafting-panel-techtree {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--inv-slot-bg);
+  border: 1px solid $slotBorder;
+  border-radius: $slotRadius;
+}
+
+.crafting-panel-techtree-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  position: relative;
+  user-select: none;
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.crafting-panel-techtree-pan-hint {
+  position: absolute;
+  top: 0.4vh;
+  left: 0.8vh;
+  z-index: 1;
+  font-size: 1vh;
+  color: rgba($textColor, 0.5);
+  pointer-events: none;
+  font-family: $mainFont;
+}
+
+.crafting-panel-techtree-viewport-content {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100%;
+  padding: 2vh 1vh 2vh;
+  will-change: transform;
+}
+
+.crafting-panel-techtree-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.crafting-panel-techtree-roots {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2.4vh;
+  flex-wrap: wrap;
+}
+
+.crafting-panel-techtree-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+// Horizontal bar is drawn per-child (padding, not gap) so it always meets node centers.
+.crafting-panel-techtree-children {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  position: relative;
+  padding-top: 0.8vh;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 0.8vh;
+    transform: translateX(-50%);
+    background: $techtree-connector;
+  }
+
+  &.crafting-panel-techtree-children--single {
+    padding-top: 1.6vh;
+
+    &::before {
+      height: 1.6vh;
+    }
+  }
+}
+
+.crafting-panel-techtree-child {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 0.8vh 1.2vh 0;
+  flex-shrink: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 0.8vh;
+    transform: translateX(-50%);
+    background: $techtree-connector;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    height: 2px;
+    background: $techtree-connector;
+  }
+
+  &:first-child::after {
+    left: 50%;
+    width: 50%;
+  }
+
+  &:last-child::after {
+    left: auto;
+    right: 50%;
+    width: 50%;
+  }
+
+  &:not(:first-child):not(:last-child)::after {
+    left: 0;
+    width: 100%;
+  }
+
+  &:only-child {
+    padding-top: 0;
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+}
+
+.crafting-panel-techtree-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.6vh;
+  height: 5.6vh;
+  padding: 0;
+  background-color: var(--inv-slot-bg);
+  border: 1px solid $techtree-node-border;
+  border-radius: $slotRadius;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  &:hover,
+  &.crafting-panel-techtree-node--selected {
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 0 0.8vh rgba(var(--inv-highlight), 0.45);
+  }
+  &.crafting-panel-techtree-node--locked {
+    opacity: 0.7;
+    filter: saturate(0.7);
+  }
+}
+
+.crafting-panel-techtree-node-icon {
+  width: 4vh;
+  height: 4vh;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.crafting-panel-techtree-node-lock {
+  position: absolute;
+  bottom: 0.2vh;
+  right: 0.2vh;
+  font-size: 1vh;
+}
+
+.crafting-panel-techtree-sidebar {
+  flex-shrink: 0;
+  max-height: 42%;
+  overflow: auto;
+  border-top: 1px solid $slotBorder;
+}
+
+.crafting-panel-techtree-detail {
+  padding: 1vh 1.2vh 1.2vh;
+}
+
+.crafting-panel-techtree-detail-title {
+  margin: 0 0 1vh;
+  font-size: 1.4vh;
+  font-family: $mainFont;
+  color: $textColor;
+  padding-bottom: 0.6vh;
+  border-bottom: 1px solid $slotBorder;
+}
+
+.crafting-panel-techtree-detail-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6vh 1vh;
+  margin-bottom: 1vh;
+}
+
+.crafting-panel-techtree-detail-ingredient {
+  display: flex;
+  align-items: center;
+  gap: 0.5vh;
+  font-size: 1.2vh;
+  font-family: $mainFont;
+  color: $textColor;
+}
+
+.crafting-panel-techtree-detail-ingredient-icon {
+  width: 2.2vh;
+  height: 2.2vh;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.crafting-panel-techtree-detail-ingredient-count--low {
+  color: #e57373;
+}
+
+.crafting-panel-techtree-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6vh;
+}
+
+.crafting-panel-techtree-detail-require-parent {
+  width: 100%;
+  margin: 0 0 0.4vh;
+  font-size: 1.1vh;
+  color: rgba($textColor, 0.7);
+  font-family: $mainFont;
+}
+
+.crafting-panel-techtree-detail-craft,
+.crafting-panel-techtree-detail-unlock {
+  font-size: 1.2vh;
+  color: $textColor;
+  background-color: rgba(0, 0, 0, 0.35);
+  padding: 0.6vh 1.1vh;
+  border-radius: $slotRadius;
+  border: 1px solid $slotBorder;
+  font-family: $mainFont;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  &:not(:disabled):hover {
+    border-color: rgba(255, 255, 255, 0.55);
+  }
+}
+
+.crafting-panel-techtree-detail-unlock {
+  width: 100%;
+  text-align: center;
+}
+
+.crafting-panel-techtree-detail-empty {
+  margin: 0;
+  font-size: 1.3vh;
+  color: rgba($textColor, 0.5);
+  font-family: $mainFont;
+}
+
+.research-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+}
+
+.research-header {
+  height: $gridHeaderHeight;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.research-title {
+  margin: 0;
+  font-family: $mainFont;
+  font-size: 1.5vh;
+  font-weight: 600;
+  color: $textColor;
+}
+
+.research-hint {
+  margin: 1vh 0 0;
+  font-family: $mainFont;
+  font-size: 1.15vh;
+  color: rgba($textColor, 0.55);
+}
+
+.research-slot-wrap {
+  display: flex;
+  justify-content: center;
+  width: $gridSize;
+  height: $gridSize;
+  padding: 0;
+  margin: 1vh 0;
+
+  > .inventory-slot {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.research-cost {
+  display: flex;
+  align-items: center;
+  gap: 0.5vh;
+  font-size: 1.2vh;
+  font-family: $mainFont;
+  color: $textColor;
+}
+
+.research-cost-icon {
+  width: 2.2vh;
+  height: 2.2vh;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.research-cost-low {
+  color: #e57373;
+}
+
+.research-status {
+  margin: 0;
+  min-height: 1.4vh;
+  font-size: 1.15vh;
+  font-family: $mainFont;
+  color: rgba($textColor, 0.7);
+  text-align: center;
+}
+
+.research-button {
+  min-width: 16vh;
+  padding: 0.7vh 1.4vh;
+  font-size: 1.2vh;
+  color: $textColor;
+  background-color: rgba(0, 0, 0, 0.35);
+  border-radius: $slotRadius;
+  border: 1px solid $slotBorder;
+  font-family: $mainFont;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  &:not(:disabled):hover {
+    border-color: rgba(255, 255, 255, 0.55);
   }
 }

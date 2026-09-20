@@ -165,5 +165,58 @@ return {
 		model = {
 			`prop_vend_soda_02`, `prop_vend_fridge01`, `prop_vend_water_01`, `prop_vend_soda_01`
 		}
-	}
+	},
+
+	-- Sell-only. Catalogue prices are what the player receives.
+	Pawn = {
+		name = 'Pawn Shop',
+		style = 'pawn',
+		icon = 'fas fa-sack-dollar',
+		blip = {
+			id = 431, colour = 5, scale = 0.8
+		}, inventory = {
+			{ name = 'phone', price = 50 },
+			{ name = 'radio', price = 40 },
+			{ name = 'lockpick', price = 8 },
+			{ name = 'gold', price = 250 },
+			{ name = 'diamond', price = 400 },
+			{ name = 'scrapmetal', price = 2 },
+			{ name = 'garbage', price = 1 },
+			{ name = 'WEAPON_KNIFE', price = 60 },
+			{ name = 'WEAPON_BAT', price = 40 },
+		}, locations = {
+			vec3(182.47, -1319.21, 29.32),
+		}, targets = {
+			{ loc = vec3(182.47, -1319.21, 29.32), length = 0.6, width = 0.6, heading = 240.0, minZ = 29.3, maxZ = 29.9, distance = 2.0, ped = `a_m_m_hasjew_01`, scenario = 'WORLD_HUMAN_CLIPBOARD' },
+		}
+	},
+
+	-- Buy + sell. Same grid as pawn: drag listing to inventory to buy, drag item onto listing to sell.
+	-- buyback items that are not in inventory still appear as sell-only rows.
+	Trader = {
+		name = 'Trader',
+		style = 'trader',
+		icon = 'fas fa-exchange-alt',
+		blip = {
+			id = 52, colour = 2, scale = 0.8
+		},
+		inventory = {
+			{ name = 'burger', price = 15 },
+			{ name = 'water', price = 8 },
+			{ name = 'lockpick', price = 50 },
+		},
+		buyback = {
+			['burger'] = 5,
+			['water'] = 3,
+			['phone'] = 30,
+			['radio'] = 25,
+		},
+		buybackCurrency = 'money',
+		locations = {
+			vec3(-1816.53, -1193.45, 14.31),
+		},
+		targets = {
+			{ loc = vec3(-1816.53, -1193.45, 14.31), heading = 50.0, ped = `a_m_m_eastsa_01`, scenario = 'WORLD_HUMAN_CLIPBOARD', distance = 2.0 },
+		}
+	},
 }

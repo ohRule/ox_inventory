@@ -141,7 +141,7 @@ const WearablesPanel: React.FC = () => {
             label={active.label}
           />
         ) : (
-          // Transparent region — scripted cam shows the ped through the NUI
+          // Transparent region — pause-menu ped shows through the NUI
           <div className="wearables-preview">
             {!selected && <span className="wearables-preview-hint">Select a wearable</span>}
             {selected && <span className="wearables-preview-hint">{active?.label}</span>}

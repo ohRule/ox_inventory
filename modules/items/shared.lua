@@ -115,6 +115,55 @@ for k, v in pairs(lib.load('data.items') or {}) do
     end
 end
 
+-- Register ammo-box items from data/ammoboxes.lua
+for k, box in pairs(lib.load('data.ammoboxes') or {}) do
+	if type(box) == 'table' and box.give then
+		local success, response = pcall(newItem, {
+			name = k,
+			label = box.label or k,
+			weight = box.weight or 500,
+			stack = true,
+			close = true,
+			consume = 1,
+			client = {
+				label = locale('unboxing_ammo', box.ammo or box.label or k),
+				usetime = box.duration or 6000,
+				cancel = true,
+				anim = { dict = 'mini@repair', clip = 'fixing_a_player', flag = 49 },
+				disable = { combat = true },
+				image = box.image,
+			},
+		})
+
+		if not success then
+			warn(('An error occurred while creating ammo box "%s"\n^1SCRIPT ERROR: %s^0'):format(k, response))
+		end
+	end
+end
+
+-- Empty mags can be used to pack themselves (see data/magload.lua)
+for name, recipe in pairs(lib.load('data.magload') or {}) do
+	if type(recipe) == 'table' and recipe.give then
+		local item = ItemList[name]
+		if item then
+			-- Not weapon ammo — using the item packs it instead of reloading
+			item.ammo = nil
+			item.consume = 1
+			item.allowArmed = true
+			item.close = true
+
+			if not isServer then
+				item.client = item.client or {}
+				item.client.label = locale('loading_mag', recipe.ammo or item.label)
+				item.client.usetime = recipe.duration or 3000
+				item.client.cancel = true
+				item.client.anim = { dict = 'mini@repair', clip = 'fixing_a_player', flag = 49 }
+				item.client.disable = { combat = true }
+			end
+		end
+	end
+end
+
 ItemList.cash = ItemList.money
 
 return ItemList

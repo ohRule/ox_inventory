@@ -628,7 +628,7 @@ function Inventory.Create(id, label, invType, slots, weight, maxWeight, owner, i
         dbId = dbId
 	}
 
-	if invType == 'drop' or invType == 'temp' or invType == 'dumpster' then
+	if invType == 'drop' or invType == 'temp' or invType == 'dumpster' or invType == 'recycler' or invType == 'lootprop' or invType == 'research' or invType == 'furnace' then
 		self.datastore = true
 	else
 		self.changed = false
@@ -742,6 +742,7 @@ function Inventory.Save(inv)
     end
 
     local data = next(buffer) and json.encode(buffer) or nil
+    if inv.type == 'armoury' then data = data or '[]' end
     inv.changed = false
 
     if inv.player then
@@ -1789,12 +1790,62 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
         end
 
         if data.toType == 'newdrop' then
+            if fromInventory.type == 'armoury' then return false end
             return dropItem(source, fromInventory, fromData, data)
         end
 
 		if fromData then
             if fromData.metadata.container and toInventory.type == 'container' then return false end
             if toData and toData.metadata.container and fromInventory.type == 'container' then return false end
+
+			if fromInventory.type == 'recycler' or toInventory.type == 'recycler' then
+				local Recycler = require 'modules.recycler.server'
+				if not Recycler.allowMove(fromInventory, toInventory, data.fromSlot, data.toSlot) then
+					return false
+				end
+			end
+
+			if fromInventory.type == 'furnace' or toInventory.type == 'furnace' then
+				local Furnace = require 'modules.furnace.server'
+				if not Furnace.allowMove(fromInventory, toInventory, data.fromSlot, data.toSlot) then
+					return false
+				end
+			end
+
+			if fromInventory.type == 'lootprop' or toInventory.type == 'lootprop' then
+				local Loot = require 'modules.loot.server'
+				if not Loot.allowMove(fromInventory, toInventory, data.fromSlot, data.toSlot, source) then
+					return false
+				end
+			end
+
+			if fromInventory.type == 'armoury' or toInventory.type == 'armoury' then
+				local Armoury = require 'modules.loadout.server'
+				if not Armoury.allowMove(fromInventory, toInventory, data.fromSlot) then
+					return false
+				end
+
+				-- Items dropped into an armoury are destroyed; vehicle stock is take-only
+				if toInventory.type == 'armoury' and fromInventory.type == 'player' then
+					if not Inventory.RemoveItem(fromInventory, fromData.name, data.count, nil, data.fromSlot) then
+						return false
+					end
+
+					toInventory:syncSlotsWithClients({
+						{
+							item = toInventory.items[data.toSlot] or { slot = data.toSlot },
+							inventory = toInventory.id
+						}
+					}, true)
+
+					if fromInventory.weapon == data.fromSlot then
+						fromInventory.weapon = nil
+						TriggerClientEvent('ox_inventory:disarm', fromInventory.id)
+					end
+
+					return true
+				end
+			end
 
 			local container, containerItem = (not sameInventory and playerInventory.containerSlot) and (fromInventory.type == 'container' and fromInventory or toInventory)
 
@@ -1857,6 +1908,14 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 						end
 					else return false, 'cannot_carry' end
 				else
+					-- Combine two different items in the player inventory (mag + bullets, etc.)
+					if fromInventory.type == 'player' then
+						local DragCraft = require 'modules.dragcraft.server'
+						if DragCraft.tryCraft(hookPayload) then
+							return false
+						end
+					end
+
 					local hooks <close> = TriggerEventHooks('swapItems', hookPayload)
 
 					if not hooks.success then return end
@@ -2388,6 +2447,7 @@ local function prepareInventorySave(inv, buffer, time)
     if not shouldSave then return end
 
     local data = next(buffer) and json.encode(buffer) or nil
+    if inv.type == 'armoury' then data = data or '[]' end
     inv.changed = false
     table.wipe(buffer)
 
@@ -2632,7 +2692,26 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 				value = 0
 			end
 
-			if action == 'load' and (not shared.durability or (weapon.metadata.durability or 0) > 0) then
+			if action == 'loadMagazine' and (not shared.durability or (weapon.metadata.durability or 0) > 0) then
+				-- Swap 1 loaded mag for a full clip; give the empty mag back
+				local weaponItem = Items(weapon.name)
+				local magazineItem = weaponItem.ammoname
+				local emptyMagazineItem = weaponItem.emptyMagazine or weaponItem.emptyMagazineItem
+
+				if not magazineItem then return end
+				if not Inventory.RemoveItem(inventory, magazineItem, 1) then return end
+
+				weapon.metadata.ammo = value
+				weapon.metadata.specialAmmo = specialAmmo
+				weapon.weight = Inventory.SlotWeight(item, weapon)
+
+				if emptyMagazineItem then
+					Inventory.AddItem(inventory, emptyMagazineItem, 1)
+				end
+			elseif action == 'load' and (not shared.durability or (weapon.metadata.durability or 0) > 0) then
+				local weaponItem = Items(weapon.name)
+				local useMagazine = weaponItem.useMagazine or weaponItem.usesMagazine
+				local emptyMagazineItem = weaponItem.emptyMagazine or weaponItem.emptyMagazineItem
 				local ammo = Items(weapon.name).ammoname
 				local diff = value - (weapon.metadata.ammo or 0)
 
@@ -2641,6 +2720,11 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 				weapon.metadata.ammo = value
 				weapon.metadata.specialAmmo = specialAmmo
 				weapon.weight = Inventory.SlotWeight(item, weapon)
+
+				-- Shotguns: 1 shell loaded → 1 empty hull
+				if useMagazine and emptyMagazineItem then
+					Inventory.AddItem(inventory, emptyMagazineItem, diff)
+				end
 			elseif action == 'throw' then
 				if not Inventory.RemoveItem(inventory, weapon.name, 1, weapon.metadata, weapon.slot) then return end
 			elseif action == 'component' then
