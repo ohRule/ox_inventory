@@ -221,6 +221,13 @@ local function loadHotbarFromServer(serverBinds)
 	SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
 end
 
+-- ruck_events puts the pre-event binds back after a server-shop match.
+RegisterNetEvent('ox_inventory:applyHotbar', function(binds)
+    if source == '' then return end
+    hotbarReady = false
+    loadHotbarFromServer(binds)
+end)
+
 -- Clear binds on logout so the next character doesn't briefly show the previous set
 do
 	local _onLogout = client.onLogout
@@ -966,6 +973,11 @@ local function useSlot(slot, noAnim)
 				local componentType = data.type
 				local weaponComponents = PlayerData.inventory[currentWeapon.slot].metadata.components
 
+				-- Preconfigured attachments cannot be changed
+				if weaponComponents and #weaponComponents > 0 then
+					return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
+				end
+
 				-- Checks if the weapon already has the same component type attached
 				for componentIndex = 1, #weaponComponents do
 					if componentType == Items[weaponComponents[componentIndex]].type then
@@ -1680,6 +1692,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			ammoName = v.ammoname,
 			image = v.client?.image,
 			weapon = v.weapon,
+			wearable = v.wearable,
 		}
 	end
 
@@ -1781,7 +1794,9 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			items = ItemData,
 			leftInventory = {
 				id = cache.playerId,
-				slots = shared.playerslots,
+				slots = shared.playerslots + #require('modules.wearables.shared'),
+				bagSlots = shared.playerslots,
+				wearableIds = require('modules.wearables.shared'),
 				items = PlayerData.inventory,
 				maxWeight = shared.playerweight,
 			},
@@ -2116,12 +2131,48 @@ RegisterNUICallback('setHotbarHud', function(data, cb)
 	cb(1)
 end)
 
+-- Last inventory highlight (rgb triplet). ruck_hud reads this so the HUD can match it.
+local hudHighlight = '180, 180, 185'
+
+local function normaliseHighlight(rgb)
+	if type(rgb) ~= 'string' then return nil end
+
+	local r, g, b = rgb:match('^(%d%d?%d?)%s*,%s*(%d%d?%d?)%s*,%s*(%d%d?%d?)$')
+	r, g, b = tonumber(r), tonumber(g), tonumber(b)
+
+	if not r or r > 255 or g > 255 or b > 255 then return nil end
+
+	return ('%d, %d, %d'):format(r, g, b)
+end
+
+RegisterNUICallback('syncHudHighlight', function(data, cb)
+	local rgb = type(data) == 'table' and normaliseHighlight(data.rgb) or nil
+
+	if rgb and rgb ~= hudHighlight then
+		hudHighlight = rgb
+		TriggerEvent('ruck_hud:setHighlight', hudHighlight)
+	end
+
+	cb(1)
+end)
+
+exports('getHudHighlight', function()
+	return hudHighlight
+end)
+
 RegisterNUICallback('getItemData', function(itemName, cb)
 	cb(Items[itemName])
 end)
 
 RegisterNUICallback('removeComponent', function(data, cb)
 	cb(1)
+
+	local itemSlot = data.slot and PlayerData.inventory[data.slot]
+
+	-- Preconfigured attachments cannot be removed
+	if itemSlot?.metadata?.components and #itemSlot.metadata.components > 0 then
+		return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
+	end
 
 	if not currentWeapon then
 		return TriggerServerEvent('ox_inventory:updateWeapon', 'component', data)
@@ -2131,7 +2182,7 @@ RegisterNUICallback('removeComponent', function(data, cb)
 		return lib.notify({ id = 'weapon_hand_wrong', type = 'error', description = locale('weapon_hand_wrong') })
 	end
 
-	local itemSlot = PlayerData.inventory[currentWeapon.slot]
+	itemSlot = PlayerData.inventory[currentWeapon.slot]
 
     if not itemSlot then return end
 
@@ -2153,17 +2204,9 @@ RegisterNUICallback('removeComponent', function(data, cb)
 	end
 end)
 
-RegisterNUICallback('removeAmmo', function(slot, cb)
+-- Unloading ammo from weapons is disabled
+RegisterNUICallback('removeAmmo', function(_, cb)
 	cb(1)
-	local slotData = PlayerData.inventory[slot]
-
-	if not slotData or not slotData.metadata.ammo or slotData.metadata.ammo == 0 then return end
-
-	local success = lib.callback.await('ox_inventory:removeAmmoFromWeapon', false, slot)
-
-	if success and slot == currentWeapon?.slot then
-		SetPedAmmo(playerPed, currentWeapon.hash, 0)
-	end
 end)
 
 RegisterNUICallback('useItem', function(slot, cb)

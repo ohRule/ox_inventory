@@ -82,6 +82,10 @@ function server.setPlayerInventory(player, data)
 
         if server.syncInventory then server.syncInventory(inv) end
 
+        require('modules.wearables.server').apply(inv)
+        require('modules.wearables.server').syncEquipped(inv)
+        require('modules.attachments.server').sync(inv)
+
         -- Per-character hotbar binds from DB
         local hotbar = db.loadHotbar(player.identifier)
 
@@ -122,6 +126,16 @@ end
 
 RegisterNetEvent('ox_inventory:saveHotbar', function(binds)
     savePlayerHotbar(source, binds)
+end)
+
+exports('GetHotbar', function(source)
+    local inv = Inventory(source)
+    if not inv or not inv.owner then return end
+    return db.loadHotbar(inv.owner)
+end)
+
+exports('SetHotbar', function(source, binds)
+    return savePlayerHotbar(source, binds)
 end)
 
 -- One-time KVP → DB migration: only accepted when this character has no saved hotbar yet
@@ -370,6 +384,8 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
         label = left.label,
         type = left.type,
         slots = left.slots,
+        bagSlots = left.bagSlots,
+        wearableIds = require('modules.wearables.shared'),
         weight = left.weight,
         maxWeight = left.maxWeight
     }, right and {
@@ -892,3 +908,5 @@ require 'modules.loot.server'
 require 'modules.ammobox.server'
 require 'modules.magload.server'
 require 'modules.loadout.server'
+require 'modules.wearables.server'
+require 'modules.attachments.server'

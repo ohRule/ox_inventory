@@ -834,6 +834,15 @@ return {
 			weight = 600,
 			throwable = true,
 		},
+
+		['WEAPON_HMSMG'] = {
+			label = 'Handmade SMG',
+			weight = 3400,
+			durability = 0.03,
+			ammoname = 'ammo-45',
+			useMagazine = true,
+			emptyMagazine = 'empty_45_magazine'
+		},
 	},
 
 	Components = {

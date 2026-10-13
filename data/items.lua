@@ -162,6 +162,41 @@ return {
 		stack = true,
 	},
 
+	['gps'] = {
+		label = 'GPS',
+		weight = 200,
+		stack = false,
+		close = false,
+		consume = 0,
+		-- Goes in the wearables watch slot and keeps the minimap on
+		wearable = 'watch',
+		client = {
+			event = 'ruck_hud:useGPS',
+		},
+	},
+
+	['backpack'] = {
+		label = 'Backpack',
+		weight = 1500,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'backpack',
+	},
+
+	-- Empty carrier for the wearables armour slot (plates go in its storage later)
+	['platecarrier'] = {
+		label = 'Plate Carrier',
+		weight = 2000,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'armour',
+		client = {
+			image = 'armour.png',
+		},
+	},
+
 	['phone'] = {
 		label = 'Phone',
 		weight = 190,
@@ -180,6 +215,13 @@ return {
 				end
 			end
 		}
+	},
+
+	['tablet'] = {
+		label = 'Tablet',
+		weight = 190,
+		stack = false,
+		consume = 0,
 	},
 
 	['money'] = {

@@ -10,4 +10,5 @@ export type ItemData = {
   ammoName?: string;
   image?: string;
   weapon?: boolean | number;
+  wearable?: string;
 };

@@ -58,9 +58,6 @@ const InventoryContext: React.FC = () => {
       case 'remove':
         fetchNui('removeComponent', { component: data?.component, slot: data?.slot });
         break;
-      case 'removeAmmo':
-        fetchNui('removeAmmo', item.slot);
-        break;
       case 'copy':
         setClipboard(data.serial || '');
         break;
@@ -101,27 +98,13 @@ const InventoryContext: React.FC = () => {
           <MenuItem onClick={() => handleClick({ action: 'split' })} label={Locale.ui_split || 'Split'} />
         )}
         <MenuItem onClick={() => handleClick({ action: 'drop' })} label={Locale.ui_drop || 'Drop'} />
-        {item && item.metadata?.ammo > 0 && (
-          <MenuItem onClick={() => handleClick({ action: 'removeAmmo' })} label={Locale.ui_remove_ammo} />
-        )}
         {item && item.metadata?.serial && (
           <MenuItem
             onClick={() => handleClick({ action: 'copy', serial: item.metadata?.serial })}
             label={Locale.ui_copy}
           />
         )}
-        {item && item.metadata?.components && item.metadata?.components.length > 0 && (
-          <Menu label={Locale.ui_removeattachments}>
-            {item &&
-              item.metadata?.components.map((component: string, index: number) => (
-                <MenuItem
-                  key={index}
-                  onClick={() => handleClick({ action: 'remove', component, slot: item.slot })}
-                  label={Items[component]?.label || ''}
-                />
-              ))}
-          </Menu>
-        )}
+        {/* Attachments are locked when metadata.components is set (e.g. loadout weapons) */}
         {((item && item.name && Items[item.name]?.buttons?.length) || 0) > 0 && (
           <>
             {item &&

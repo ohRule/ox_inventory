@@ -8,7 +8,8 @@ import { cancelAmountPrompt, isAmountPromptOpen } from '../helpers/amountPrompt'
 
 type FrameVisibleSetter = (bool: boolean) => void;
 
-const LISTENED_KEYS = ['Escape'];
+// Escape always; Tab too (opens inventory, and frontend wearables can eat the game keybind)
+const LISTENED_KEYS = ['Escape', 'Tab'];
 
 // Basic hook to listen for key presses in NUI in order to exit
 export const useExitListener = (visibleSetter: FrameVisibleSetter) => {
@@ -22,6 +23,11 @@ export const useExitListener = (visibleSetter: FrameVisibleSetter) => {
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
       if (LISTENED_KEYS.includes(e.code)) {
+        // Stop Tab from jumping focus inside the NUI
+        if (e.code === 'Tab') {
+          e.preventDefault();
+        }
+
         if (isAmountPromptOpen()) {
           cancelAmountPrompt();
           return;
@@ -34,8 +40,9 @@ export const useExitListener = (visibleSetter: FrameVisibleSetter) => {
       }
     };
 
-    window.addEventListener('keyup', keyHandler);
+    // keydown so we can preventDefault Tab before the browser moves focus
+    window.addEventListener('keydown', keyHandler);
 
-    return () => window.removeEventListener('keyup', keyHandler);
+    return () => window.removeEventListener('keydown', keyHandler);
   }, []);
 };

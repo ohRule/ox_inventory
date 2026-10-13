@@ -1,4 +1,4 @@
-import { canStack, findAvailableSlot, furnaceAllows, furnaceInputRange, getTargetInventory, isSlotWithItem } from '../helpers';
+import { canStack, findAvailableSlot, furnaceAllows, furnaceInputRange, getTargetInventory, isSlotWithItem, wearableAllows, wearableZone } from '../helpers';
 import { promptMoveAmount } from '../helpers/amountPrompt';
 import { validateMove } from '../thunks/validateItems';
 import { store } from '../store';
@@ -82,6 +82,9 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
     const range = furnaceInputRange(targetInventory, sourceSlot.name);
     if (!range) return;
     searchItems = targetInventory.items.filter((slot) => slot.slot >= range[0] && slot.slot <= range[1]);
+  } else if (!target && targetInventory.type === InventoryType.PLAYER && targetInventory.bagSlots) {
+    // Never auto-fill wearable equipment slots
+    searchItems = targetInventory.items.filter((slot) => slot.slot <= targetInventory.bagSlots!);
   }
 
   if (target && inputLimit && target.item.slot > inputLimit) return;
@@ -90,6 +93,15 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
   if (targetInventory.type === InventoryType.LOOTPROP && sourceInventory.type !== InventoryType.LOOTPROP) return;
 
   if (isFurnace && target && !furnaceAllows(targetInventory, target.item.slot, sourceSlot.name)) return;
+
+  if (
+    target &&
+    targetInventory.type === InventoryType.PLAYER &&
+    wearableZone(targetInventory, target.item.slot) &&
+    !wearableAllows(targetInventory, target.item.slot, sourceSlot.name)
+  ) {
+    return;
+  }
 
   // Pawn/trader: drag a matching player item onto the listing to sell it
   if (sourceInventory.type === InventoryType.PLAYER && targetInventory.type === InventoryType.SHOP && (targetInventory.style === 'pawn' || targetInventory.style === 'trader')) {

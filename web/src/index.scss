@@ -1127,6 +1127,7 @@ body.inv-dragging {
 }
 
 .wearables-slot {
+  position: relative;
   flex: 1;
   min-height: 0;
   box-sizing: border-box;
@@ -1140,6 +1141,30 @@ body.inv-dragging {
   justify-content: center;
   cursor: pointer;
   transition: background-color 150ms, border-color 150ms;
+
+  .inventory-slot {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .wearables-slot-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0.45;
+    z-index: 1;
+
+    svg {
+      width: 48%;
+      height: 48%;
+      fill: currentColor;
+    }
+  }
 
   .wearables-slot-icon {
     width: 48%;
@@ -1162,6 +1187,15 @@ body.inv-dragging {
 
   &:active {
     transform: none;
+  }
+
+  // Mask / watch / holster — drop targets only, no select highlight
+  &.wearables-slot-static {
+    cursor: default;
+
+    &:hover {
+      background-color: var(--inv-slot-bg);
+    }
   }
 }
 

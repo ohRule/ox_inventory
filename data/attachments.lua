@@ -1,4 +1,5 @@
 -- Props attached to the ped while the item is in inventory.
+-- Synced via player state (ox_attachments) so other players see them too.
 -- Weapons hide when actually in-hand; they stay on the body in vehicles.
 -- Weapon props use the item's metadata (suppressor, mag, flashlight, tint).
 --
@@ -9,7 +10,7 @@
 -- hideInVehicle: optional; default false (keep props visible in cars)
 
 return {
-	['WEAPON_ASSAULTRIFLE'] = {
+	['WEAPON_SPECIALCARBINE_MK2'] = {
 		bone = 24818, -- SKEL_Spine3 (upper back)
 		pos = vec3(0.09, -0.16, 0.02),
 		rot = vec3(0.0, 165.0, 0.0),

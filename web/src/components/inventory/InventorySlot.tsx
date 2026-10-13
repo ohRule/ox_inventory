@@ -6,7 +6,7 @@ import WeightBar from '../utils/WeightBar';
 import { onDrop } from '../../dnd/onDrop';
 import { onSell } from '../../dnd/onSell';
 import { onBuy } from '../../dnd/onBuy';
-import { canCraftItem, canPurchaseItem, furnaceAllows, getItemUrl, isGridShop, isSlotWithItem, shopSellPrice } from '../../helpers';
+import { canCraftItem, canPurchaseItem, furnaceAllows, getItemUrl, isGridShop, isSlotWithItem, shopSellPrice, wearableAllows, wearableZone } from '../../helpers';
 import { Locale } from '../../store/locale';
 import { onCraft } from '../../dnd/onCraft';
 import useNuiEvent from '../../hooks/useNuiEvent';
@@ -80,6 +80,7 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
   const furnaceInv = useAppSelector((state) =>
     inventoryType === InventoryType.FURNACE ? state.inventory.rightInventory : undefined
   );
+  const leftInventory = useAppSelector((state) => state.inventory.leftInventory);
   const [justRevealed, setJustRevealed] = useState(false);
   const hadItem = useRef(!!item.name);
 
@@ -166,6 +167,9 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
           if (source.inventory === InventoryType.FURNACE && source.item.slot === item.slot) return false;
           return !!furnaceInv && furnaceAllows(furnaceInv, item.slot, source.item.name);
         }
+        if (inventoryType === InventoryType.PLAYER && wearableZone(leftInventory, item.slot)) {
+          return source.inventory === InventoryType.PLAYER && wearableAllows(leftInventory, item.slot, source.item.name);
+        }
         if (inventoryType === InventoryType.SHOP && gridShop) {
           return (
             source.inventory === InventoryType.PLAYER &&
@@ -182,7 +186,7 @@ const InventorySlot: React.ForwardRefRenderFunction<HTMLDivElement, SlotProps> =
         );
       },
     }),
-    [inventoryType, item, disableDrop, locked, searching, gridShop, isTrader, shopStyle, furnaceInv]
+    [inventoryType, item, disableDrop, locked, searching, gridShop, isTrader, shopStyle, furnaceInv, leftInventory]
   );
 
   useNuiEvent('refreshSlots', (data: { items?: ItemsPayload | ItemsPayload[] }) => {

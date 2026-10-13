@@ -183,6 +183,42 @@ RegisterNUICallback('setRightPanelMode', function(data, cb)
 	end
 end)
 
+-- Hide the pause-menu ped while backpack/armour storage is open.
+RegisterNUICallback('setWearablesPedVisible', function(data, cb)
+	cb(1)
+
+	local visible = not data or data.visible ~= false
+	if not previewActive then return end
+
+	SetPauseMenuPedSleepState(visible)
+	if not visible then
+		SetFrontendActive(false)
+	else
+		-- Bring the empty frontend + ped back without rebuilding the clone
+		SetFrontendActive(true)
+		ActivateFrontendMenu(MENU_HASH, false, -1)
+		ReplaceHudColourWithRgba(HUD_PAUSE_BG, 0, 0, 0, 0)
+		if previewPed and DoesEntityExist(previewPed) then
+			GivePedToPauseMenu(previewPed, 2)
+			SetPauseMenuPedLighting(true)
+			SetPauseMenuPedSleepState(true)
+		end
+		SetNuiFocus(true, true)
+		SetMouseCursorVisibleInMenus(false)
+	end
+end)
+
+-- Watch slot GPS: keep the minimap on while equipped.
+RegisterNetEvent('ox_inventory:wearableEquipped', function(equipped)
+	local gpsOn = equipped and equipped.watch == 'gps'
+	if GetResourceState('ruck_hud') == 'started' then
+		pcall(function()
+			exports.ruck_hud:setGPS(gpsOn)
+		end)
+	end
+	TriggerEvent('ruck_hud:setGPS', gpsOn)
+end)
+
 return {
 	Start = startWearablesPreview,
 	Stop = stopWearablesPreview,

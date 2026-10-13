@@ -2,7 +2,7 @@ if not lib then return end
 
 local Utils = require 'modules.utils.client'
 local Items = require 'modules.items.client'
-local attachments = lib.load('data.attachments') or {}
+local Config = lib.load('data.attachments') or {}
 
 local boneIds = {
 	SKEL_ROOT = 0,
@@ -29,6 +29,7 @@ local boneIds = {
 	SKEL_R_Foot = 52301,
 }
 
+-- serverId -> itemName -> { entity, signature, pending }
 local attached = {}
 
 local function resolveBone(ped, bone)
@@ -44,8 +45,8 @@ local function resolveBone(ped, bone)
 	return GetEntityBoneIndexByName(ped, bone)
 end
 
-local function componentSignature(slot)
-	local meta = slot and slot.metadata or {}
+local function componentSignature(meta)
+	meta = meta or {}
 	local comps = meta.components
 	local list = ''
 
@@ -59,8 +60,7 @@ local function componentSignature(slot)
 end
 
 -- Apply the same suppressor/mag/tint metadata used when the weapon is in-hand.
-local function applyWeaponComponents(entity, weaponHash, slot)
-	local meta = slot and slot.metadata
+local function applyWeaponComponents(entity, weaponHash, meta, itemName)
 	if not meta then return end
 
 	if meta.components then
@@ -79,8 +79,8 @@ local function applyWeaponComponents(entity, weaponHash, slot)
 	end
 
 	if meta.specialAmmo then
-		local item = Items(slot.name)
-		local modelName = item and item.model or slot.name
+		local item = Items(itemName)
+		local modelName = item and item.model or itemName
 		local clipComponentKey = ('%s_CLIP'):format(tostring(modelName):gsub('WEAPON_', 'COMPONENT_'))
 		local specialClip = ('%s_%s'):format(clipComponentKey, meta.specialAmmo:upper())
 
@@ -94,18 +94,48 @@ local function applyWeaponComponents(entity, weaponHash, slot)
 	end
 end
 
-local function deleteAttachment(name)
-	local data = attached[name]
+local function deleteAttachment(serverId, name)
+	local byPlayer = attached[serverId]
+	if not byPlayer then return end
+
+	local data = byPlayer[name]
 	if not data then return end
 
 	if data.entity then
 		Utils.DeleteEntity(data.entity)
 	end
 
-	attached[name] = nil
+	byPlayer[name] = nil
+
+	if not next(byPlayer) then
+		attached[serverId] = nil
+	end
 end
 
-local function createWeaponProp(name, cfg, slot)
+local function clearPlayer(serverId)
+	local byPlayer = attached[serverId]
+	if not byPlayer then return end
+
+	for name in pairs(byPlayer) do
+		deleteAttachment(serverId, name)
+	end
+end
+
+local function pedFor(serverId)
+	if serverId == cache.serverId then
+		return cache.ped
+	end
+
+	local playerId = GetPlayerFromServerId(serverId)
+	if playerId == -1 then return end
+
+	local ped = GetPlayerPed(playerId)
+	if ped and ped ~= 0 and DoesEntityExist(ped) then
+		return ped
+	end
+end
+
+local function createWeaponProp(name, meta)
 	local item = Items(name)
 	local weaponHash = item and item.hash
 	if not weaponHash then return end
@@ -119,7 +149,7 @@ local function createWeaponProp(name, cfg, slot)
 	if not loaded then return end
 
 	local coords = GetEntityCoords(cache.ped)
-	-- true = default mag so empty weapons still look loaded
+	-- Local object: every client draws their own copy (components sync correctly this way)
 	local entity = CreateWeaponObject(weaponHash, 1, coords.x, coords.y, coords.z, true, 1.0, 0)
 
 	if not entity or entity == 0 then
@@ -128,7 +158,7 @@ local function createWeaponProp(name, cfg, slot)
 	end
 
 	SetEntityAsMissionEntity(entity, true, false)
-	applyWeaponComponents(entity, weaponHash, slot)
+	applyWeaponComponents(entity, weaponHash, meta, name)
 	RemoveWeaponAsset(weaponHash)
 
 	return entity
@@ -151,152 +181,211 @@ local function createObjectProp(name, cfg)
 	return entity
 end
 
-local function attachToPed(entity, cfg)
+local function attachToPed(entity, ped, cfg)
 	local pos = cfg.pos or vec3(0.0, 0.0, 0.0)
 	local rot = cfg.rot or vec3(0.0, 0.0, 0.0)
-	local bone = resolveBone(cache.ped, cfg.bone or 24818)
+	local bone = resolveBone(ped, cfg.bone or 24818)
 
 	SetEntityVisible(entity, true, false)
-	AttachEntityToEntity(entity, cache.ped, bone, pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, true, true, false, true, 2, true)
+	AttachEntityToEntity(entity, ped, bone, pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, true, true, false, true, 2, true)
 end
 
-local function ensureAttachment(name, cfg, slot)
-	local signature = componentSignature(slot)
-	local current = attached[name]
+local function isHoldingWeapon(serverId, ped, name)
+	local item = Items(name)
+	local hash = item and item.hash
+	if not hash or not ped then return false end
+
+	if serverId == cache.serverId then
+		local equipped = exports.ox_inventory:getCurrentWeapon()
+		if not equipped or equipped.name ~= name then return false end
+
+		if cache.vehicle then
+			return GetSelectedPedWeapon(ped) == hash
+		end
+
+		return true
+	end
+
+	return GetSelectedPedWeapon(ped) == hash
+end
+
+local function shouldHide(serverId, ped, name, cfg)
+	local isWeapon = name:sub(1, 7) == 'WEAPON_'
+	local hideWhenEquipped = cfg.hideWhenEquipped
+	if hideWhenEquipped == nil then hideWhenEquipped = isWeapon end
+
+	if hideWhenEquipped and isHoldingWeapon(serverId, ped, name) then return true end
+
+	if cfg.hideInVehicle then
+		if serverId == cache.serverId then
+			if cache.vehicle then return true end
+		elseif IsPedInAnyVehicle(ped, false) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function ensureAttachment(serverId, ped, name, cfg, meta)
+	attached[serverId] = attached[serverId] or {}
+	local byPlayer = attached[serverId]
+	local signature = componentSignature(meta)
+	local current = byPlayer[name]
 
 	-- Re-pin surviving props; GTA often detaches them on vehicle enter/exit
 	if current and current.signature == signature and current.entity and DoesEntityExist(current.entity) then
-		if not IsEntityAttachedToEntity(current.entity, cache.ped) then
-			attachToPed(current.entity, cfg)
+		if not IsEntityAttachedToEntity(current.entity, ped) then
+			attachToPed(current.entity, ped, cfg)
 		end
 		return
 	end
 
-	-- Already spawning this exact suppressor/mag combo
 	if current and current.pending == signature then
 		return
 	end
 
-	deleteAttachment(name)
-	attached[name] = { pending = signature, signature = signature }
+	deleteAttachment(serverId, name)
+	attached[serverId] = attached[serverId] or {}
+	attached[serverId][name] = { pending = signature, signature = signature }
 
 	local isWeapon = name:sub(1, 7) == 'WEAPON_'
-	local entity = isWeapon and createWeaponProp(name, cfg, slot) or createObjectProp(name, cfg)
+	local entity = isWeapon and createWeaponProp(name, meta) or createObjectProp(name, cfg)
 
-	-- A later refresh may have cancelled this spawn while we waited for the model
-	if not attached[name] or attached[name].pending ~= signature then
+	if not attached[serverId] or not attached[serverId][name] or attached[serverId][name].pending ~= signature then
 		if entity then Utils.DeleteEntity(entity) end
 		return
 	end
 
 	if not entity then
-		attached[name] = nil
+		attached[serverId][name] = nil
+		return
+	end
+
+	-- Ped may have streamed out while the model loaded
+	ped = pedFor(serverId)
+	if not ped then
+		Utils.DeleteEntity(entity)
+		attached[serverId][name] = nil
 		return
 	end
 
 	SetEntityCollision(entity, false, false)
 	SetEntityCompletelyDisableCollision(entity, true, false)
 	SetCanClimbOnEntity(entity, false)
-	attachToPed(entity, cfg)
+	attachToPed(entity, ped, cfg)
 
-	attached[name] = { entity = entity, signature = signature }
+	attached[serverId][name] = { entity = entity, signature = signature }
 end
 
--- Hide only when the gun is actually in-hand. Stored/in-vehicle weapons stay on the body.
-local function isHoldingWeapon(name, equipped)
-	if not equipped or equipped.name ~= name then return false end
-
-	local hash = equipped.hash
-	if cache.vehicle and hash then
-		return GetSelectedPedWeapon(cache.ped) == hash
+local function refreshPlayer(serverId, payload)
+	local ped = pedFor(serverId)
+	if not ped then
+		clearPlayer(serverId)
+		return
 	end
 
-	return true
-end
-
-local function shouldHide(name, cfg, equipped)
-	local isWeapon = name:sub(1, 7) == 'WEAPON_'
-	local hideWhenEquipped = cfg.hideWhenEquipped
-	if hideWhenEquipped == nil then hideWhenEquipped = isWeapon end
-
-	if hideWhenEquipped and isHoldingWeapon(name, equipped) then return true end
-	if cfg.hideInVehicle and cache.vehicle then return true end
-
-	return false
-end
-
--- Drop handles GTA deleted during seat changes so the next spawn is clean
-local function pruneMissing()
-	for name, data in pairs(attached) do
-		if data.entity and not DoesEntityExist(data.entity) then
-			attached[name] = nil
-		end
-	end
-end
-
--- fromWeaponEvent: Equip/Disarm fire this before getCurrentWeapon() is assigned
-local function refresh(equipped, fromWeaponEvent)
-	pruneMissing()
-
-	local inventory = PlayerData and PlayerData.inventory
-	if not fromWeaponEvent then
-		equipped = exports.ox_inventory:getCurrentWeapon()
-	end
-
+	payload = payload or {}
 	local owned = {}
 
-	if inventory then
-		for _, slot in pairs(inventory) do
-			local name = slot and slot.name
-			local cfg = name and attachments[name]
-			if cfg and not owned[name] then
-				owned[name] = { cfg = cfg, slot = slot }
+	for name, meta in pairs(payload) do
+		local cfg = Config[name]
+		if cfg then
+			owned[name] = true
+			if shouldHide(serverId, ped, name, cfg) then
+				deleteAttachment(serverId, name)
+			else
+				ensureAttachment(serverId, ped, name, cfg, meta)
 			end
 		end
 	end
 
-	for name, data in pairs(owned) do
-		if shouldHide(name, data.cfg, equipped) then
-			deleteAttachment(name)
-		else
-			ensureAttachment(name, data.cfg, data.slot)
-		end
-	end
-
-	for name in pairs(attached) do
-		if not owned[name] then
-			deleteAttachment(name)
+	local byPlayer = attached[serverId]
+	if byPlayer then
+		for name in pairs(byPlayer) do
+			if not owned[name] then
+				deleteAttachment(serverId, name)
+			end
 		end
 	end
 end
 
-AddEventHandler('ox_inventory:updateInventory', function()
-	refresh()
+local function refreshAll()
+	-- Local player always; remotes from state bags already tracked
+	refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
+
+	for serverId in pairs(attached) do
+		if serverId ~= cache.serverId then
+			local player = Player(serverId)
+			refreshPlayer(serverId, player and player.state and player.state.ox_attachments)
+		end
+	end
+end
+
+AddStateBagChangeHandler('ox_attachments', nil, function(bagName, _, value)
+	local serverId = tonumber(bagName:match('player:(%d+)'))
+	if not serverId then return end
+
+	if value == nil then
+		clearPlayer(serverId)
+		return
+	end
+
+	refreshPlayer(serverId, value)
 end)
 
-AddEventHandler('ox_inventory:currentWeapon', function(weapon)
-	refresh(weapon, true)
+AddEventHandler('ox_inventory:currentWeapon', function()
+	refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
 end)
 
 lib.onCache('ped', function()
-	for name in pairs(attached) do
-		deleteAttachment(name)
-	end
-	refresh()
+	clearPlayer(cache.serverId)
+	refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
 end)
 
 -- Seat changes strip attached objects; refresh again after GTA finishes
 lib.onCache('vehicle', function()
-	refresh()
-	SetTimeout(250, refresh)
+	refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
+	SetTimeout(250, function()
+		refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
+	end)
+end)
+
+-- Keep remote props pinned / hidden when they draw weapons or change seats
+CreateThread(function()
+	while true do
+		Wait(500)
+
+		for serverId in pairs(attached) do
+			if serverId ~= cache.serverId then
+				local player = Player(serverId)
+				refreshPlayer(serverId, player and player.state and player.state.ox_attachments)
+			else
+				-- Re-pin local props if GTA detached them
+				refreshPlayer(serverId, LocalPlayer.state.ox_attachments)
+			end
+		end
+
+		-- Catch remotes that gained attachments while we had none tracked
+		for _, playerId in ipairs(GetActivePlayers()) do
+			local serverId = GetPlayerServerId(playerId)
+			if serverId ~= cache.serverId and not attached[serverId] then
+				local player = Player(serverId)
+				local payload = player and player.state and player.state.ox_attachments
+				if payload and next(payload) then
+					refreshPlayer(serverId, payload)
+				end
+			end
+		end
+	end
 end)
 
 AddEventHandler('onResourceStop', function(resource)
 	if resource ~= shared.resource then return end
 
-	for name in pairs(attached) do
-		deleteAttachment(name)
+	for serverId in pairs(attached) do
+		clearPlayer(serverId)
 	end
 end)
 
-return { refresh = refresh }
+return { refresh = refreshAll }

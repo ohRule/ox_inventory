@@ -55,6 +55,11 @@ end
 ---@param weight { left?: number, right?: number } | number
 function OxInventory:syncSlotsWithPlayer(slots, weight)
 	TriggerClientEvent('ox_inventory:updateSlots', self.id, slots, weight)
+
+	-- Keep body weapon props in sync for other players
+	if self.player then
+		require('modules.attachments.server').sync(self)
+	end
 end
 
 ---Sync an inventory's state with all player's accessing it.
@@ -73,6 +78,7 @@ function OxInventory:syncSlotsWithClients(slots, syncOwner)
 
 	if syncOwner and self.player then
 		TriggerClientEvent('ox_inventory:updateSlots', self.id, slots, self.weight)
+		require('modules.attachments.server').sync(self)
 	end
 end
 
@@ -472,17 +478,10 @@ function Inventory.SlotWeight(item, slot, ignoreCount)
 
 	if not slot.metadata then slot.metadata = {} end
 
-	if item.ammoname and slot.metadata.ammo then
-		local ammoWeight = Items(item.ammoname)?.weight
-
-		if ammoWeight then
-			weight += (ammoWeight * slot.metadata.ammo)
-		end
+	-- Loaded ammo does not change weapon weight (base weight only)
+	if item.hash == `WEAPON_PETROLCAN` and slot.metadata.ammo then
+		slot.metadata.weight = 15000 * (slot.metadata.ammo / 100)
 	end
-
-    if item.hash == `WEAPON_PETROLCAN` then
-        slot.metadata.weight = 15000 * (slot.metadata.ammo / 100)
-    end
 
 	if slot.metadata.components then
 		for i = #slot.metadata.components, 1, -1 do
@@ -1178,7 +1177,8 @@ function Inventory.AddItem(inv, item, count, metadata, slot, cb)
 		local items = inv.items
 		slotMetadata, slotCount = Items.Metadata(inv.id, item, metadata and table.clone(metadata) or {}, count)
 
-		for i = 1, inv.slots do
+		local slotLimit = inv.bagSlots or inv.slots
+		for i = 1, slotLimit do
 			local slotData = items[i]
 
 			if item.stack and slotData ~= nil and slotData.name == item.name and table.matches(slotData.metadata, slotMetadata) then
@@ -1326,13 +1326,16 @@ function Inventory.GetItemSlots(inv, item, metadata, strict)
 	inv = Inventory(inv) --[[@as OxInventory]]
 	if not inv?.slots then return end
 
-	local totalCount, slots, emptySlots = 0, {}, inv.slots
+	local bag = inv.bagSlots or inv.slots
+	local totalCount, slots, emptySlots = 0, {}, bag
 
 	if strict == nil then strict = true end
 	local tablematch = strict and table.matches or table.contains
 
 	for k, v in pairs(inv.items) do
-		emptySlots -= 1
+		if type(k) == 'number' and k <= bag then
+			emptySlots -= 1
+		end
 		if v.name == item.name then
 			if metadata and v.metadata == nil then
 				v.metadata = {}
@@ -1812,6 +1815,13 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 				end
 			end
 
+			if fromInventory.player or toInventory.player then
+				local Wearables = require 'modules.wearables.server'
+				if not Wearables.allowMove(fromInventory, toInventory, data.fromSlot, data.toSlot) then
+					return false
+				end
+			end
+
 			if fromInventory.type == 'lootprop' or toInventory.type == 'lootprop' then
 				local Loot = require 'modules.loot.server'
 				if not Loot.allowMove(fromInventory, toInventory, data.fromSlot, data.toSlot, source) then
@@ -2056,6 +2066,14 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 			if fromInventory.changed ~= nil then fromInventory.changed = true end
 			if toInventory.changed ~= nil then toInventory.changed = true end
 
+			local Wearables = require 'modules.wearables.server'
+			if fromInventory.player and (Wearables.touches(fromInventory, data.fromSlot) or Wearables.touches(fromInventory, data.toSlot)) then
+				Wearables.syncEquipped(fromInventory)
+			end
+			if toInventory.player and toInventory ~= fromInventory and Wearables.touches(toInventory, data.toSlot) then
+				Wearables.syncEquipped(toInventory)
+			end
+
             CreateThread(function()
                 if sameInventory then
                     fromInventory:syncSlotsWithClients({
@@ -2270,7 +2288,8 @@ function Inventory.GetEmptySlot(inv)
 
 	local items = inventory.items
 
-	for i = 1, inventory.slots do
+	local slotLimit = inventory.bagSlots or inventory.slots
+	for i = 1, slotLimit do
 		if not items[i] then
 			return i
 		end
@@ -2292,7 +2311,8 @@ function Inventory.GetSlotForItem(inv, itemName, metadata)
 	local items = inventory.items
 	local emptySlot
 
-	for i = 1, inventory.slots do
+	local slotLimit = inventory.bagSlots or inventory.slots
+	for i = 1, slotLimit do
 		local slotData = items[i]
 
 		if not slotData and not emptySlot then
@@ -2655,26 +2675,8 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 	local vtype = type(value)
 
 	if vtype == 'table' and action == 'component' then
-		local item = inventory.items[value.slot]
-
-		if item then
-			if item.metadata.components then
-				for k, v in pairs(item.metadata.components) do
-					if v == value.component then
-						if not Inventory.AddItem(inventory, value.component, 1) then return end
-
-						table.remove(item.metadata.components, k)
-						inventory:syncSlotsWithPlayer({
-							{ item = item }
-						}, inventory.weight)
-
-			            if server.syncInventory then server.syncInventory(inventory) end
-
-						return true
-					end
-				end
-			end
-		end
+		-- Preconfigured attachments (metadata.components) cannot be removed
+		return false
 	else
 		if not slot then slot = inventory.weapon end
 
@@ -2728,6 +2730,11 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 			elseif action == 'throw' then
 				if not Inventory.RemoveItem(inventory, weapon.name, 1, weapon.metadata, weapon.slot) then return end
 			elseif action == 'component' then
+				-- Preconfigured attachments cannot be removed or added to
+				if weapon.metadata.components and #weapon.metadata.components > 0 then
+					return false
+				end
+
 				if vtype == 'number' then
 					if not Inventory.AddItem(inventory, weapon.metadata.components[value], 1) then return false end
 
@@ -2788,33 +2795,9 @@ RegisterNetEvent('ox_inventory:updateWeapon', function(action, value, slot, spec
 	updateWeapon(source, action, value, slot, specialAmmo)
 end)
 
-lib.callback.register('ox_inventory:removeAmmoFromWeapon', function(source, slot)
-	local inventory = Inventory(source)
-
-	if not inventory then return end
-
-	local slotData = inventory.items[slot]
-
-	if not slotData or not slotData.metadata.ammo or slotData.metadata.ammo < 1 then return end
-
-	local item = Items(slotData.name)
-
-	if not item or not item.ammoname then return end
-	local specialAmmo = slotData.metadata.specialAmmo and { type = slotData.metadata.specialAmmo } or nil
-
-
-	if Inventory.AddItem(inventory, item.ammoname, slotData.metadata.ammo, specialAmmo) then
-		slotData.metadata.ammo = 0
-		slotData.weight = Inventory.SlotWeight(item, slotData)
-
-		inventory:syncSlotsWithPlayer({
-			{ item = slotData }
-		}, inventory.weight)
-
-		if server.syncInventory then server.syncInventory(inventory) end
-
-		return true
-	end
+-- Unloading ammo from weapons is disabled
+lib.callback.register('ox_inventory:removeAmmoFromWeapon', function()
+	return false
 end)
 
 local function checkStashProperties(properties)

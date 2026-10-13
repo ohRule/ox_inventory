@@ -43,6 +43,7 @@ return {
 				{ name = 'WEAPON_NIGHTSTICK', count = 4 },
 				{ name = 'WEAPON_FLASHLIGHT', count = 4 },
 				{ name = 'WEAPON_CARBINERIFLE', count = 2, metadata = { registered = true, serial = 'POL' } },
+				{ name = 'WEAPON_BULLPUPRIFLE_MK2', count = 2, metadata = { registered = true, serial = 'POL', components = { 'at_flashlight', 'at_grip', 'at_suppressor_heavy', 'at_clip_extended_rifle', 'at_scope_small', 'at_barrel',}} },
 				{ name = 'ammo-rifle', count = 6 },
 				{ name = 'armour', count = 6 },
 			},

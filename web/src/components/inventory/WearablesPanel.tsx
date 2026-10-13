@@ -1,12 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { isEnvBrowser } from '../../utils/misc';
+import React, { useEffect, useState } from 'react';
+import { useAppSelector } from '../../store';
+import { selectLeftInventory } from '../../store/inventory';
+import { InventoryType } from '../../typings';
+import InventorySlot from './InventorySlot';
+import { fetchNui } from '../../utils/fetchNui';
 
 export type WearableSlotId = 'mask' | 'watch' | 'backpack' | 'armour' | 'holster';
 
 type WearableDef = {
   id: WearableSlotId;
   label: string;
-  /** Extra container slots when this piece is equipped + selected */
   storageSlots?: number;
   icon: React.ReactNode;
 };
@@ -61,25 +64,12 @@ const WEARABLES: WearableDef[] = [
   },
 ];
 
-/** Browser-only mock: which wearables look "equipped" in Vite preview */
-const DEBUG_EQUIPPED: Partial<Record<WearableSlotId, boolean>> = isEnvBrowser()
-  ? { backpack: true, armour: true }
-  : {};
-
-/** Empty storage cells for backpack / armour containers */
-const StorageGrid: React.FC<{ slots: number; locked: boolean; label: string }> = ({
-  slots,
-  locked,
-  label,
-}) => {
-  // Prefer a tall column layout (2×5 backpack, 1×3 armour) over a wide row
+const StorageGrid: React.FC<{ slots: number; label: string }> = ({ slots, label }) => {
   const cols = slots > 5 ? 2 : 1;
 
   return (
-    <div className={`wearables-storage${locked ? ' wearables-storage-locked' : ''}`}>
-      <p className="wearables-storage-label">
-        {locked ? `Equip a ${label.toLowerCase()} to use storage` : `${label} storage`}
-      </p>
+    <div className="wearables-storage">
+      <p className="wearables-storage-label">{label} storage</p>
       <div
         className="wearables-storage-grid"
         style={{ gridTemplateColumns: `repeat(${cols}, var(--wearable-slot-size, 9.6vh))` }}
@@ -92,60 +82,78 @@ const StorageGrid: React.FC<{ slots: number; locked: boolean; label: string }> =
   );
 };
 
-/**
- * Wearables column + detail pane.
- * Preview is the live ped (scripted camera); backpack/armour reveal extra slots when selected.
- */
 const WearablesPanel: React.FC = () => {
+  const inventory = useAppSelector(selectLeftInventory);
   const [selected, setSelected] = useState<WearableSlotId | null>(null);
-  // Equip state will come from the game later; mock equipped backpack/armour in browser
-  const equipped = useMemo(() => DEBUG_EQUIPPED, []);
+  const bagSlots = inventory.bagSlots ?? inventory.slots;
+  const ids = inventory.wearableIds || WEARABLES.map((w) => w.id);
 
   const active = WEARABLES.find((w) => w.id === selected);
+  const selectedItem = selected
+    ? inventory.items[bagSlots + ids.indexOf(selected)]
+    : undefined;
+  // Only backpack/armour open a storage pane; hide the ped while that pane is up
+  const showStorage = !!(active?.storageSlots && selectedItem?.name);
 
-  const onSelect = (id: WearableSlotId) => {
-    setSelected((prev) => (prev === id ? null : id));
-  };
+  useEffect(() => {
+    // Unequipping the selected piece clears selection
+    if (selected && !selectedItem?.name) {
+      setSelected(null);
+    }
+  }, [selected, selectedItem?.name]);
+
+  useEffect(() => {
+    fetchNui('setWearablesPedVisible', { visible: !showStorage });
+  }, [showStorage]);
+
+  // Restore ped when leaving the wearables panel
+  useEffect(() => {
+    return () => {
+      fetchNui('setWearablesPedVisible', { visible: true });
+    };
+  }, []);
 
   return (
     <div className="wearables-panel">
       <div className="wearables-slots" role="list" aria-label="Wearables">
-        {WEARABLES.map((item) => {
-          const isSelected = selected === item.id;
-          const isEquipped = !!equipped[item.id];
+        {WEARABLES.map((def, index) => {
+          const slot = bagSlots + index + 1;
+          const item = inventory.items[slot - 1] || { slot };
+          const canSelect = !!def.storageSlots;
+          const isSelected = canSelect && selected === def.id;
+          const isEquipped = !!item.name;
 
           return (
-            <button
-              key={item.id}
-              type="button"
+            <div
+              key={def.id}
               role="listitem"
               className={`wearables-slot${isSelected ? ' wearables-slot-selected' : ''}${
                 isEquipped ? ' wearables-slot-equipped' : ''
-              }`}
-              title={item.label}
-              aria-label={item.label}
-              aria-pressed={isSelected}
-              onClick={() => onSelect(item.id)}
+              }${canSelect ? '' : ' wearables-slot-static'}`}
+              title={def.label}
+              onClick={
+                canSelect
+                  ? () => setSelected((prev) => (prev === def.id ? null : def.id))
+                  : undefined
+              }
             >
-              <span className="wearables-slot-icon">{item.icon}</span>
-            </button>
+              {!item.name && <span className="wearables-slot-placeholder">{def.icon}</span>}
+              <InventorySlot
+                item={item}
+                inventoryId={inventory.id}
+                inventoryType={InventoryType.PLAYER}
+                inventoryGroups={inventory.groups}
+              />
+            </div>
           );
         })}
       </div>
 
       <div className="wearables-detail">
-        {active?.storageSlots !== undefined ? (
-          <StorageGrid
-            slots={active.storageSlots}
-            locked={!equipped[active.id]}
-            label={active.label}
-          />
+        {showStorage && active?.storageSlots ? (
+          <StorageGrid slots={active.storageSlots} label={active.label} />
         ) : (
-          // Transparent region — pause-menu ped shows through the NUI
-          <div className="wearables-preview">
-            {!selected && <span className="wearables-preview-hint">Select a wearable</span>}
-            {selected && <span className="wearables-preview-hint">{active?.label}</span>}
-          </div>
+          <div className="wearables-preview" />
         )}
       </div>
     </div>

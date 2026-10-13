@@ -185,6 +185,19 @@ export const furnaceInputRange = (inventory: Inventory, name: string): [number, 
   if (inventory.acceptOre?.[name]) return [1, ore];
 };
 
+export const wearableZone = (inventory: Inventory, slot: number) => {
+  const bag = inventory.bagSlots;
+  if (!bag || slot <= bag) return;
+  const ids = inventory.wearableIds || ['mask', 'watch', 'backpack', 'armour', 'holster'];
+  return ids[slot - bag - 1];
+};
+
+export const wearableAllows = (inventory: Inventory, slot: number, name?: string) => {
+  const zone = wearableZone(inventory, slot);
+  if (!zone) return true;
+  return !!name && Items[name]?.wearable === zone;
+};
+
 export const findAvailableSlot = (item: Slot, data: ItemData, items: Slot[]) => {
   if (!data.stack) return items.find((target) => target.name === undefined);
 

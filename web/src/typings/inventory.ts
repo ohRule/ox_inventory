@@ -55,4 +55,7 @@ export type Inventory = {
   fuelSlots?: number;
   acceptOre?: Record<string, boolean>;
   acceptFuel?: Record<string, boolean>;
+  /** Player bag size; extra slots after this are wearables */
+  bagSlots?: number;
+  wearableIds?: string[];
 };

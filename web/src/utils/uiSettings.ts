@@ -1,3 +1,5 @@
+import { fetchNui } from './fetchNui';
+
 const STORAGE_KEY = 'ox_inventory_ui_settings';
 
 export type HighlightId = 'grey' | 'white' | 'blue' | 'green' | 'amber' | 'rose' | 'custom';
@@ -93,8 +95,12 @@ export const saveUiSettings = (settings: UiSettings) => {
 /** Push settings into CSS custom properties on :root */
 export const applyUiSettings = (settings: UiSettings) => {
   const root = document.documentElement;
+  const highlight = resolveHighlightRgb(settings);
 
-  root.style.setProperty('--inv-highlight', resolveHighlightRgb(settings));
+  root.style.setProperty('--inv-highlight', highlight);
   root.style.setProperty('--inv-panel-alpha', String(settings.panelOpacity));
   root.style.setProperty('--inv-hotbar-scale', String(settings.hotbarScale));
+
+  // ruck_hud listens for this so its chrome matches the highlight colour.
+  void fetchNui('syncHudHighlight', { rgb: highlight }).catch(() => undefined);
 };
