@@ -11,6 +11,25 @@ local previewPed
 local savedBlur = false
 local ignoreExitUntil = 0
 
+-- The pause menu keeps the copy it was given, so the preview is cloned again whenever
+-- the player's clothes or props change (a mask, a bag, a vest going on or off).
+local pedHidden = false
+local shownLook
+local LOOK_PROPS = { 0, 1, 2, 6, 7 }
+
+local function lookOf(ped)
+	local parts = { GetEntityModel(ped) }
+	for component = 0, 11 do
+		parts[#parts + 1] = GetPedDrawableVariation(ped, component)
+		parts[#parts + 1] = GetPedTextureVariation(ped, component)
+	end
+	for _, prop in ipairs(LOOK_PROPS) do
+		parts[#parts + 1] = GetPedPropIndex(ped, prop)
+		parts[#parts + 1] = GetPedPropTextureIndex(ped, prop)
+	end
+	return table.concat(parts, ',')
+end
+
 local function deletePreviewPed()
 	if previewPed and DoesEntityExist(previewPed) then
 		SetEntityAsMissionEntity(previewPed, true, true)
@@ -97,11 +116,63 @@ local function stopWearablesPreview()
 	end)
 end
 
+-- Every frame while the preview is up.
+local function holdFrame(extra)
+	hideClone(previewPed)
+	if extra then hideClone(extra) end
+	SetMouseCursorVisibleInMenus(false)
+	DisableControlAction(0, 199, true)
+	DisableControlAction(0, 200, true)
+end
+
+-- Hands the pause menu a fresh clone once its clothes have streamed in (else the menu
+-- copies the old ones), then deletes the old clone.
+local function refreshPreview(gen)
+	local playerPed = PlayerPedId()
+	local look = lookOf(playerPed)
+	local fresh = ClonePed(playerPed, false, false, false)
+	if not fresh or fresh == 0 then
+		shownLook = look -- don't retry every check; the next change will
+		return
+	end
+
+	SetEntityAsMissionEntity(fresh, true, true)
+	hideClone(fresh, true)
+
+	local timeout = GetGameTimer() + 1000
+	while not HaveAllStreamingRequestsCompleted(fresh) and GetGameTimer() < timeout
+		and previewActive and previewGen == gen and not pedHidden do
+		holdFrame(fresh)
+		Wait(0)
+	end
+
+	if not previewActive or previewGen ~= gen or pedHidden then
+		SetEntityAsMissionEntity(fresh, true, true)
+		DeletePed(fresh)
+		return
+	end
+
+	local old = previewPed
+	previewPed = fresh
+	shownLook = look
+	GivePedToPauseMenu(fresh, 2)
+	SetPauseMenuPedLighting(true)
+	SetPauseMenuPedSleepState(true)
+	hideClone(fresh)
+
+	if old and DoesEntityExist(old) then
+		SetEntityAsMissionEntity(old, true, true)
+		DeletePed(old)
+		if DoesEntityExist(old) then DeleteEntity(old) end
+	end
+end
+
 ---Pause-menu clone ped (studio lighting) instead of a scripted cam on the real player.
 local function startWearablesPreview()
 	if previewActive then return end
 
 	previewActive = true
+	pedHidden = false
 	armIgnoreExit()
 	previewGen += 1
 	local gen = previewGen
@@ -129,6 +200,7 @@ local function startWearablesPreview()
 		SetMouseCursorVisibleInMenus(false)
 
 		local playerPed = PlayerPedId()
+		shownLook = lookOf(playerPed)
 		local cloned = ClonePed(playerPed, false, false, false)
 		if not cloned or cloned == 0 then
 			if previewGen == gen then stopWearablesPreview() end
@@ -142,10 +214,7 @@ local function startWearablesPreview()
 		-- Keep pause controls dead while the overlay boots (GivePedToPauseMenu needs a short delay)
 		local readyAt = GetGameTimer() + 500
 		while previewActive and previewGen == gen and GetGameTimer() < readyAt do
-			hideClone(cloned)
-			SetMouseCursorVisibleInMenus(false)
-			DisableControlAction(0, 199, true)
-			DisableControlAction(0, 200, true)
+			holdFrame()
 			Wait(0)
 		end
 		if previewGen ~= gen or not previewActive then
@@ -162,11 +231,14 @@ local function startWearablesPreview()
 		SetNuiFocus(true, true)
 		SetMouseCursorVisibleInMenus(false)
 
+		-- previewPed, not cloned: refreshPreview swaps it. Clothes checked four times a second.
+		local lookAt = 0
 		while previewActive and previewGen == gen do
-			hideClone(cloned)
-			SetMouseCursorVisibleInMenus(false)
-			DisableControlAction(0, 199, true)
-			DisableControlAction(0, 200, true)
+			holdFrame()
+			if not pedHidden and GetGameTimer() >= lookAt then
+				lookAt = GetGameTimer() + 250
+				if lookOf(PlayerPedId()) ~= shownLook then refreshPreview(gen) end
+			end
 			Wait(0)
 		end
 	end)
@@ -189,6 +261,7 @@ RegisterNUICallback('setWearablesPedVisible', function(data, cb)
 
 	local visible = not data or data.visible ~= false
 	if not previewActive then return end
+	pedHidden = not visible -- no refreshing while it's put away
 
 	SetPauseMenuPedSleepState(visible)
 	if not visible then
