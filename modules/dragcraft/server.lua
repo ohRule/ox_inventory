@@ -216,7 +216,8 @@ local function addRecipe(source, id, recipe, sync)
 	lib.callback.await('dragCraft:client:addRecipe', source, id, recipe, true)
 end
 
-lib.callback.register('dragCraft:server:addRecipe', addRecipe)
+-- For server scripts only. This is not a callback clients can reach: a modified client
+-- could otherwise add a recipe that gives any item, in any amount.
 exports('addRecipe', addRecipe)
 
 return {
