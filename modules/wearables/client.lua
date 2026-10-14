@@ -211,6 +211,7 @@ end)
 -- Watch slot GPS: keep the minimap on while equipped.
 RegisterNetEvent('ox_inventory:wearableEquipped', function(equipped)
 	local gpsOn = equipped and equipped.watch == 'gps'
+	client.gpsWorn = gpsOn and true or false -- the inventory keeps the minimap up while open
 	if GetResourceState('ruck_hud') == 'started' then
 		pcall(function()
 			exports.ruck_hud:setGPS(gpsOn)
