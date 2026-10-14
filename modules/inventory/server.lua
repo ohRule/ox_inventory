@@ -2695,7 +2695,28 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 	local vtype = type(value)
 
 	if vtype == 'table' and action == 'component' then
-		-- Preconfigured attachments (metadata.components) cannot be removed
+		-- An attachment taken off a gun that isn't in hand. A job kit's gun
+		-- (metadata.loadout) keeps the ones it came with.
+		local item = inventory.items[value.slot]
+
+		if item and item.metadata.components and not item.metadata.loadout then
+			for k, v in pairs(item.metadata.components) do
+				if v == value.component then
+					if not Inventory.AddItem(inventory, value.component, 1) then return false end
+
+					table.remove(item.metadata.components, k)
+					item.weight = Inventory.SlotWeight(Items(item.name), item)
+					inventory:syncSlotsWithPlayer({
+						{ item = item }
+					}, inventory.weight)
+
+					if server.syncInventory then server.syncInventory(inventory) end
+
+					return true
+				end
+			end
+		end
+
 		return false
 	else
 		if not slot then slot = inventory.weapon end
@@ -2750,13 +2771,16 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 			elseif action == 'throw' then
 				if not Inventory.RemoveItem(inventory, weapon.name, 1, weapon.metadata, weapon.slot) then return end
 			elseif action == 'component' then
-				-- Preconfigured attachments cannot be removed or added to
-				if weapon.metadata.components and #weapon.metadata.components > 0 then
+				-- A job kit's gun (metadata.loadout) stays as it came
+				if weapon.metadata.loadout then
 					return false
 				end
 
+				if not weapon.metadata.components then weapon.metadata.components = {} end
+
 				if vtype == 'number' then
-					if not Inventory.AddItem(inventory, weapon.metadata.components[value], 1) then return false end
+					local name = weapon.metadata.components[value]
+					if not name or not Inventory.AddItem(inventory, name, 1) then return false end
 
 					table.remove(weapon.metadata.components, value)
 					weapon.weight = Inventory.SlotWeight(item, weapon)

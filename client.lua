@@ -971,10 +971,11 @@ local function useSlot(slot, noAnim)
                 if not components then return end
 
 				local componentType = data.type
-				local weaponComponents = PlayerData.inventory[currentWeapon.slot].metadata.components
+				local weaponMetadata = PlayerData.inventory[currentWeapon.slot].metadata
+				local weaponComponents = weaponMetadata.components or {}
 
-				-- Preconfigured attachments cannot be changed
-				if weaponComponents and #weaponComponents > 0 then
+				-- A job kit's gun (metadata.loadout) stays as it came; any other takes attachments
+				if weaponMetadata.loadout then
 					return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
 				end
 
@@ -2187,8 +2188,8 @@ RegisterNUICallback('removeComponent', function(data, cb)
 
 	local itemSlot = data.slot and PlayerData.inventory[data.slot]
 
-	-- Preconfigured attachments cannot be removed
-	if itemSlot?.metadata?.components and #itemSlot.metadata.components > 0 then
+	-- A job kit's gun (metadata.loadout) keeps the attachments it came with
+	if itemSlot?.metadata?.loadout then
 		return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
 	end
 
@@ -2250,9 +2251,17 @@ RegisterNUICallback('fitAttachment', function(data, cb)
 	local label = part.metadata?.label or partData.label
 	local weaponComponents = gun.metadata?.components or {}
 
-	-- Preconfigured attachments cannot be changed
-	if #weaponComponents > 0 then
+	-- A job kit's gun (metadata.loadout) stays as it came, as with Use
+	if gun.metadata?.loadout then
 		return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
+	end
+
+	-- One attachment of each type, as with Use
+	for i = 1, #weaponComponents do
+		local fitted = Items[weaponComponents[i]]
+		if fitted and fitted.type == partData.type then
+			return lib.notify({ id = 'component_slot_occupied', type = 'error', description = locale('component_slot_occupied', partData.type) })
+		end
 	end
 
 	for i = 1, #components do

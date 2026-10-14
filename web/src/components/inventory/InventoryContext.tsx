@@ -104,7 +104,18 @@ const InventoryContext: React.FC = () => {
             label={Locale.ui_copy}
           />
         )}
-        {/* Attachments are locked when metadata.components is set (e.g. loadout weapons) */}
+        {/* A job kit's gun (metadata.loadout) keeps its attachments */}
+        {item && !item.metadata?.loadout && item.metadata?.components && item.metadata?.components.length > 0 && (
+          <Menu label={Locale.ui_removeattachments}>
+            {item.metadata?.components.map((component: string, index: number) => (
+              <MenuItem
+                key={index}
+                onClick={() => handleClick({ action: 'remove', component, slot: item.slot })}
+                label={Items[component]?.label || ''}
+              />
+            ))}
+          </Menu>
+        )}
         {((item && item.name && Items[item.name]?.buttons?.length) || 0) > 0 && (
           <>
             {item &&
