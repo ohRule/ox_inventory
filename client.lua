@@ -1186,7 +1186,10 @@ local function registerCommands()
 		name = 'hotbar',
 		description = locale('disable_hotbar'),
 		defaultKey = client.keys[3],
-		onPressed = function()
+		onPressed = function(self)
+			-- On the inventory's own key (e.g. TAB saved from the old F2/K/TAB defaults) it would
+			-- flip the hotbar every time the inventory opens or closes
+			if primary:getCurrentKey() == self:getCurrentKey() then return end
 			if EnableWeaponWheel or not invHotkeys or invOpen or lib.progressActive() then return end
 			setHotbarHudVisible(not hotbarHudVisible)
 		end
