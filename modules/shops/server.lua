@@ -389,6 +389,10 @@ lib.callback.register('ox_inventory:sellItem', function(source, data)
 		return false, false, { type = 'error', description = locale('cannot_sell') }
 	end
 
+	if fromData.metadata?.loadout then
+		return false, false, { type = 'error', description = locale('loadout_stays') }
+	end
+
 	-- Pawn listings use price; traders use buybackPrice (or placeholder metadata.price)
 	local unitPrice = shop.style == 'pawn' and shopItem.price
 		or shopItem.buybackPrice
@@ -689,6 +693,40 @@ lib.callback.register('ox_inventory:buyCart', function(source, data)
 	return true, { playerUpdates, shopUpdates, playerInv.weight }, { type = 'success', description = message }
 end)
 
+---The player's stacks of an item that can be sold: not job loadout items, which stay with them.
+---@param inv OxInventory
+---@param name string
+---@return number[], number
+local function sellableSlots(inv, name)
+	local slots, count = {}, 0
+
+	for slot, item in pairs(inv.items) do
+		if item.name == name and not item.metadata?.loadout then
+			slots[#slots + 1] = slot
+			count += item.count
+		end
+	end
+
+	table.sort(slots)
+	return slots, count
+end
+
+---Removes `count` from the sellable stacks only; nothing if there aren't enough.
+local function removeSellable(inv, name, count)
+	local slots, have = sellableSlots(inv, name)
+	if have < count then return false end
+
+	for i = 1, #slots do
+		if count <= 0 then break end
+
+		local take = math.min(count, inv.items[slots[i]].count)
+		if not Inventory.RemoveItem(inv, name, take, nil, slots[i]) then return false end
+		count -= take
+	end
+
+	return true
+end
+
 ---Sell every cart line atomically (validate all, then apply all).
 lib.callback.register('ox_inventory:sellCart', function(source, data)
 	local playerInv = Inventory(source)
@@ -734,7 +772,7 @@ lib.callback.register('ox_inventory:sellCart', function(source, data)
 		local fromItem = Items(fromData.name)
 		if not fromItem then return false end
 
-		local owned = Inventory.GetItemCount(playerInv, fromItem.name)
+		local _, owned = sellableSlots(playerInv, fromItem.name)
 		if owned < count then
 			return false, false, { type = 'error', description = locale('item_not_enough', fromItem.label) }
 		end
@@ -774,7 +812,7 @@ lib.callback.register('ox_inventory:sellCart', function(source, data)
 			currency = line.currency,
 		})
 
-		if not hooks.success or not Inventory.RemoveItem(playerInv, line.fromItem.name, line.count) then
+		if not hooks.success or not removeSellable(playerInv, line.fromItem.name, line.count) then
 			for j = 1, i - 1 do
 				local prev = planned[j]
 				Inventory.AddItem(playerInv, prev.fromItem.name, prev.count)

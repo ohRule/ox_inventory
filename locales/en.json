@@ -143,6 +143,7 @@
   "loadout_none": "You do not have a loadout",
   "loadout_cannot_carry": "Not enough space for this loadout",
   "loadout_unavailable": "No loadouts available",
+  "loadout_stays": "Loadout items stay with you until returned to the vehicle",
   "vehicle_armoury": "Vehicle Armoury",
   "vehicle_armoury_desc": "Take or return spare equipment from this vehicle"
 }
