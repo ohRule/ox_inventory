@@ -39,13 +39,12 @@ RegisterNetEvent('dragCraft:Craft', function(duration, index)
 	end
 end)
 
-local function addRecipe(id, recipe, sync)
+-- Recipes are added on the server (exports.ox_inventory:addRecipe there), which sends them
+-- here. One added from this side only shows locally: the server must never take a recipe
+-- from a client, or a modified client could add one that gives anything.
+local function addRecipe(id, recipe)
 	recipe.server = nil
 	RECIPES[id] = recipe
-
-	if sync then return end
-
-	lib.callback.await('dragCraft:server:addRecipe', false, id, recipe, true)
 end
 
 lib.callback.register('dragCraft:client:addRecipe', addRecipe)
