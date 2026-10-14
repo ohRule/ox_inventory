@@ -7,6 +7,7 @@ import { moveSlots, stackSlots, swapSlots } from '../store/inventory';
 import { Items } from '../store/items';
 import { Locale } from '../store/locale';
 import { onSell } from './onSell';
+import { fetchNui } from '../utils/fetchNui';
 
 const commitDrop = (
   sourceSlot: SlotWithItem,
@@ -101,6 +102,16 @@ export const onDrop = (source: DragSource, target?: DropTarget) => {
     !wearableAllows(targetInventory, target.item.slot, sourceSlot.name)
   ) {
     return;
+  }
+
+  // An attachment dropped on a gun in your own things is fitted to it (the client checks it
+  // fits and runs the bar); nothing moves
+  if (target && sourceInventory.type === InventoryType.PLAYER && targetInventory.type === InventoryType.PLAYER) {
+    const gun = targetInventory.items[target.item.slot - 1];
+    if (sourceData.component && isSlotWithItem(gun) && Items[gun.name]?.weapon) {
+      fetchNui('fitAttachment', { component: sourceSlot.slot, weapon: gun.slot });
+      return;
+    }
   }
 
   // Pawn/trader: drag a matching player item onto the listing to sell it
