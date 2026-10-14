@@ -56,6 +56,7 @@
   "component_invalid": "This weapon is incompatible with %s",
   "component_slot_occupied": "This weapon's %s slot is already occupied",
   "cannot_perform": "You can not perform this action",
+  "quick_throw": "Quick throw a throwable (while aiming)",
   "cannot_carry": "You can not carry that much",
   "cannot_carry_other": "Target inventory can not hold that much",
   "cannot_carry_limit": "You cannot carry more than %s %s",
