@@ -92,6 +92,10 @@ local function tryCraft(data)
 			slot = toSlot.slot,
 		},
 		result = resultForQueue,
+		-- What the client's "done" must match: this recipe, and no sooner than its bar
+		index = recipeIndex,
+		started = GetGameTimer(),
+		duration = tonumber(recipe.duration) or 0,
 	}
 
 	if recipe.server?.before and recipe.server.before(recipe) == false then
@@ -117,38 +121,90 @@ local function updateItemDurability(source, craftItem)
 	end
 end
 
-local function processCraftItem(source, craftItem)
-	if not craftItem.remove then return end
+local function wearsTool(craftItem)
+	return craftItem.amount > 0 and craftItem.amount < 1
+end
 
-	if craftItem.amount > 0 and craftItem.amount < 1 then
-		updateItemDurability(source, craftItem)
-	else
-		Inventory.RemoveItem(source, craftItem.name, craftItem.amount)
+---Everything the craft costs is still there: counts for what's used up, the same item in
+---its slot for a tool that only wears.
+local function canPay(source, queuedCraft)
+	for _, craftItem in ipairs({ queuedCraft.item1, queuedCraft.item2 }) do
+		if craftItem.remove then
+			if wearsTool(craftItem) then
+				local item = Inventory.GetSlot(source, craftItem.slot)
+				if not item or item.name ~= craftItem.name then return false end
+			elseif Inventory.GetItemCount(source, craftItem.name) < craftItem.amount then
+				return false
+			end
+		end
+	end
+
+	return true
+end
+
+---@param give boolean false to take the used-up costs, true to give them back
+local function moveCosts(source, queuedCraft, give)
+	for _, craftItem in ipairs({ queuedCraft.item1, queuedCraft.item2 }) do
+		if craftItem.remove and not wearsTool(craftItem) then
+			if give then
+				Inventory.AddItem(source, craftItem.name, craftItem.amount)
+			else
+				Inventory.RemoveItem(source, craftItem.name, craftItem.amount)
+			end
+		end
 	end
 end
 
 RegisterNetEvent('dragCraft:success', function(success, index)
 	local source = source
-	local recipe = RECIPES[index]
 	local queuedCraft = CraftQueue[source]
 
 	if not queuedCraft then return end
 
-	if success then
-		processCraftItem(source, queuedCraft.item1)
-		processCraftItem(source, queuedCraft.item2)
+	CraftQueue[source] = nil
 
-		for i = 1, #queuedCraft.result do
-			local resultData = queuedCraft.result[i]
-			Inventory.AddItem(source, resultData.name, resultData.amount)
-		end
+	-- The client says when the bar is done, so check it's the craft that was started and
+	-- that the bar could have run its course
+	if not success or index ~= queuedCraft.index then return end
+	if GetGameTimer() - queuedCraft.started < queuedCraft.duration * 0.9 then return end
 
-		if recipe?.server?.after then
-			recipe.server.after(recipe)
+	-- The costs may have been moved, dropped or used during the bar: take them only if
+	-- they're all still there, before giving anything
+	if not canPay(source, queuedCraft) then
+		return TriggerClientEvent('ox_lib:notify', source, { type = 'error', description = locale('cannot_perform') })
+	end
+
+	moveCosts(source, queuedCraft, false)
+
+	local given = {}
+
+	for i = 1, #queuedCraft.result do
+		local resultData = queuedCraft.result[i]
+
+		if Inventory.AddItem(source, resultData.name, resultData.amount) then
+			given[#given + 1] = resultData
+		else
+			-- No room for it: undo the whole craft
+			for j = 1, #given do
+				Inventory.RemoveItem(source, given[j].name, given[j].amount)
+			end
+
+			moveCosts(source, queuedCraft, true)
+			return TriggerClientEvent('ox_lib:notify', source, { type = 'error', description = locale('cannot_carry') })
 		end
 	end
 
-	CraftQueue[source] = nil
+	for _, craftItem in ipairs({ queuedCraft.item1, queuedCraft.item2 }) do
+		if craftItem.remove and wearsTool(craftItem) then
+			updateItemDurability(source, craftItem)
+		end
+	end
+
+	local recipe = RECIPES[queuedCraft.index]
+
+	if recipe?.server?.after then
+		recipe.server.after(recipe)
+	end
 end)
 
 local function addRecipe(source, id, recipe, sync)
