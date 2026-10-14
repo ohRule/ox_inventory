@@ -1712,6 +1712,16 @@ local GetLocks = require 'modules.locks'
 
 ---@param source number
 ---@param data SwapSlotData
+---Job loadout items (metadata.loadout) may only go into the inventory of the player moving
+---them, or back into an armoury. A kit only takes back what's still in the player's own
+---inventory, so one left in a stash, trunk, bag or drop, or with someone else, would outlive it.
+---@param item? table
+---@param destination OxInventory
+---@param mover OxInventory
+local function loadoutMayGo(item, destination, mover)
+	return not (item and item.metadata?.loadout) or destination == mover or destination.type == 'armoury'
+end
+
 lib.callback.register('ox_inventory:swapItems', function(source, data)
 	if data.fromType ~= data.toType and data.toType ~= 'player' and data.fromType ~= 'player' then
         Utils.LogExploit(source, 'swapItems', 'Triggered event with invalid data', true)
@@ -1794,7 +1804,14 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 
         if data.toType == 'newdrop' then
             if fromInventory.type == 'armoury' then return false end
+            if fromData.metadata?.loadout then return false, 'loadout_stays' end
             return dropItem(source, fromInventory, fromData, data)
+        end
+
+        -- A swap moves toData the other way, into fromInventory
+        if fromInventory ~= toInventory and (not loadoutMayGo(fromData, toInventory, playerInventory)
+            or not loadoutMayGo(toData, fromInventory, playerInventory)) then
+            return false, 'loadout_stays'
         end
 
 		if fromData then
@@ -2602,6 +2619,9 @@ local function giveItem(playerId, slot, target, count)
 		local data = fromInventory.items[slot]
 
 		if not data then return end
+
+		-- Job loadout items stay with whoever holds them (see loadoutMayGo)
+		if data.metadata?.loadout then return { 'loadout_stays' } end
 
         local targetState = Player(target).state
 
