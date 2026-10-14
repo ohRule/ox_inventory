@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import useNuiEvent from '../../hooks/useNuiEvent';
 import InventoryHotbar from './InventoryHotbar';
 import { useAppDispatch, useAppSelector } from '../../store';
-import { refreshSlots, setAdditionalMetadata, setupInventory, unlockLootSlot } from '../../store/inventory';
+import { refreshSlots, selectLeftInventory, setAdditionalMetadata, setupInventory, unlockLootSlot } from '../../store/inventory';
 import { useExitListener } from '../../hooks/useExitListener';
+import { InventoryType } from '../../typings';
 import type { Inventory as InventoryProps } from '../../typings';
 import RightInventory from './RightInventory';
 import LeftInventory from './LeftInventory';
@@ -29,6 +30,13 @@ const Inventory: React.FC = () => {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('inventory');
   const dispatch = useAppDispatch();
   const navPanels = useAppSelector(selectNavPanels);
+  const leftInventory = useAppSelector(selectLeftInventory);
+
+  // Is this container a bag in one of the player's Wearables slots?
+  const isWorn = (containerId: string) => {
+    const first = leftInventory.bagSlots ?? leftInventory.slots;
+    return leftInventory.items.some((item) => item.slot > first && item.metadata?.container === containerId);
+  };
 
   const changeRightPanelMode = (mode: RightPanelMode) => {
     // Ignore disabled optional panels
@@ -63,8 +71,11 @@ const Inventory: React.FC = () => {
     rightInventory?: InventoryProps;
   }>('setupInventory', (data) => {
     dispatch(setupInventory(data));
-    // External inventories (stash/shop/bench) always show on the right grid
-    if (data.rightInventory) changeRightPanelMode('inventory');
+    // External inventories (stash/shop/bench) always show on the right grid, but a bag
+    // worn in a Wearables slot opens in that panel's storage pane
+    const right = data.rightInventory;
+    if (right && !(rightPanelMode === 'wearables' && right.type === InventoryType.CONTAINER && isWorn(right.id)))
+      changeRightPanelMode('inventory');
     !inventoryVisible && setInventoryVisible(true);
   });
 

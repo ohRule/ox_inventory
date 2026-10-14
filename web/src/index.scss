@@ -1249,32 +1249,17 @@ body.inv-dragging {
   color: rgba(232, 232, 232, 0.7);
 }
 
+// The worn bag's own slots: four across (the pane's width), scrolling under the label
 .wearables-storage-grid {
   display: grid;
+  grid-template-columns: repeat(4, $gridSize);
+  grid-auto-rows: $gridSize;
   gap: $gridGap;
   justify-content: start;
   align-content: start;
   flex: 1;
   min-height: 0;
-}
-
-.wearables-storage-slot {
-  box-sizing: border-box;
-  width: $gridSize;
-  height: $gridSize;
-  border: 1px solid $slotBorder;
-  border-radius: $slotRadius;
-  background-color: var(--inv-slot-bg);
-}
-
-.wearables-storage-locked {
-  .wearables-storage-slot {
-    opacity: 0.4;
-  }
-
-  .wearables-storage-label {
-    color: rgba(232, 232, 232, 0.5);
-  }
+  overflow-y: auto;
 }
 
 // Quick craft list panel

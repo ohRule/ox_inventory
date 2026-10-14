@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAppSelector } from '../../store';
-import { selectLeftInventory } from '../../store/inventory';
+import { selectLeftInventory, selectRightInventory } from '../../store/inventory';
 import { InventoryType } from '../../typings';
 import InventorySlot from './InventorySlot';
 import { fetchNui } from '../../utils/fetchNui';
+import { getTotalWeight } from '../../helpers';
+import { Items } from '../../store/items';
 
 export type WearableSlotId = 'mask' | 'watch' | 'backpack' | 'armour' | 'holster';
 
 type WearableDef = {
   id: WearableSlotId;
   label: string;
-  storageSlots?: number;
   icon: React.ReactNode;
 };
 
@@ -36,7 +37,6 @@ const WEARABLES: WearableDef[] = [
   {
     id: 'backpack',
     label: 'Backpack',
-    storageSlots: 10,
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M8 6V5a4 4 0 0 1 8 0v1h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2zm2 0h4V5a2 2 0 0 0-4 0v1zm-3 4v3h4v-1.5h2V13h4V10H7zm0 5v4h10v-4h-4v1.5h-2V15H7z" />
@@ -46,7 +46,6 @@ const WEARABLES: WearableDef[] = [
   {
     id: 'armour',
     label: 'Armour',
-    storageSlots: 3,
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 2 4 5v6.5c0 5.1 3.4 9.4 8 10.5 4.6-1.1 8-5.4 8-10.5V5l-8-3zm0 2.2 6 2.2v5.1c0 3.9-2.5 7.2-6 8.3-3.5-1.1-6-4.4-6-8.3V6.4l6-2.2zm-3 5.3h6v2H9v-2zm0 3.5h6v2H9v-2z" />
@@ -64,19 +63,33 @@ const WEARABLES: WearableDef[] = [
   },
 ];
 
-const StorageGrid: React.FC<{ slots: number; label: string }> = ({ slots, label }) => {
-  const cols = slots > 5 ? 2 : 1;
+// A worn container (a bag) shows its own slots here. It's opened as the right-hand
+// inventory, as using it from the pockets would, so dragging in and out works as usual.
+const BagStorage: React.FC<{ label: string; containerId: string }> = ({ label, containerId }) => {
+  const rightInventory = useAppSelector(selectRightInventory);
+  const open = rightInventory.type === InventoryType.CONTAINER && rightInventory.id === containerId;
+  const weight = useMemo(
+    () => (open && rightInventory.maxWeight !== undefined ? Math.floor(getTotalWeight(rightInventory.items) * 1000) / 1000 : 0),
+    [open, rightInventory.maxWeight, rightInventory.items]
+  );
 
   return (
     <div className="wearables-storage">
-      <p className="wearables-storage-label">{label} storage</p>
-      <div
-        className="wearables-storage-grid"
-        style={{ gridTemplateColumns: `repeat(${cols}, var(--wearable-slot-size, 9.6vh))` }}
-      >
-        {Array.from({ length: slots }, (_, i) => (
-          <div key={i} className="wearables-storage-slot" />
-        ))}
+      <p className="wearables-storage-label">
+        {label}
+        {open && rightInventory.maxWeight !== undefined && ` · ${weight / 1000}/${rightInventory.maxWeight / 1000}kg`}
+      </p>
+      <div className="wearables-storage-grid">
+        {open &&
+          rightInventory.items.map((item) => (
+            <InventorySlot
+              key={`${rightInventory.id}-${item.slot}`}
+              item={item}
+              inventoryId={rightInventory.id}
+              inventoryType={rightInventory.type}
+              inventoryGroups={rightInventory.groups}
+            />
+          ))}
       </div>
     </div>
   );
@@ -84,23 +97,24 @@ const StorageGrid: React.FC<{ slots: number; label: string }> = ({ slots, label 
 
 const WearablesPanel: React.FC = () => {
   const inventory = useAppSelector(selectLeftInventory);
+  const rightInventory = useAppSelector(selectRightInventory);
   const [selected, setSelected] = useState<WearableSlotId | null>(null);
   const bagSlots = inventory.bagSlots ?? inventory.slots;
   const ids = inventory.wearableIds || WEARABLES.map((w) => w.id);
 
-  const active = WEARABLES.find((w) => w.id === selected);
   const selectedItem = selected
     ? inventory.items[bagSlots + ids.indexOf(selected)]
     : undefined;
-  // Only backpack/armour open a storage pane; hide the ped while that pane is up
-  const showStorage = !!(active?.storageSlots && selectedItem?.name);
+  const selectedBag: string | undefined = selectedItem?.name ? selectedItem.metadata?.container : undefined;
+  // Only a worn container opens the storage pane; hide the ped while that pane is up
+  const showStorage = !!selectedBag;
 
   useEffect(() => {
     // Unequipping the selected piece clears selection
-    if (selected && !selectedItem?.name) {
+    if (selected && !selectedBag) {
       setSelected(null);
     }
-  }, [selected, selectedItem?.name]);
+  }, [selected, selectedBag]);
 
   useEffect(() => {
     fetchNui('setWearablesPedVisible', { visible: !showStorage });
@@ -119,7 +133,8 @@ const WearablesPanel: React.FC = () => {
         {WEARABLES.map((def, index) => {
           const slot = bagSlots + index + 1;
           const item = inventory.items[slot - 1] || { slot };
-          const canSelect = !!def.storageSlots;
+          const bag: string | undefined = item.name ? item.metadata?.container : undefined;
+          const canSelect = !!bag;
           const isSelected = canSelect && selected === def.id;
           const isEquipped = !!item.name;
 
@@ -133,7 +148,13 @@ const WearablesPanel: React.FC = () => {
               title={def.label}
               onClick={
                 canSelect
-                  ? () => setSelected((prev) => (prev === def.id ? null : def.id))
+                  ? () => {
+                      if (selected === def.id) return setSelected(null);
+                      setSelected(def.id);
+                      // Using it again while it's open would shut the whole inventory
+                      const open = rightInventory.type === InventoryType.CONTAINER && rightInventory.id === bag;
+                      if (!open) fetchNui('useItem', slot);
+                    }
                   : undefined
               }
             >
@@ -150,8 +171,11 @@ const WearablesPanel: React.FC = () => {
       </div>
 
       <div className="wearables-detail">
-        {showStorage && active?.storageSlots ? (
-          <StorageGrid slots={active.storageSlots} label={active.label} />
+        {selectedBag ? (
+          <BagStorage
+            label={selectedItem?.metadata?.label || (selectedItem?.name && Items[selectedItem.name]?.label) || ''}
+            containerId={selectedBag}
+          />
         ) : (
           <div className="wearables-preview" />
         )}
