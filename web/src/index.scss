@@ -1145,7 +1145,9 @@ body.inv-dragging {
   .inventory-slot {
     width: 100%;
     height: 100%;
-    background: transparent;
+    // Colour only: the `background` shorthand also resets the slot's
+    // no-repeat, size and position, so item pictures showed huge and tiled
+    background-color: transparent;
     border-color: transparent;
   }
 
