@@ -181,8 +181,9 @@ local function createObjectProp(name, cfg)
 	return entity
 end
 
-local function attachToPed(entity, ped, cfg)
-	local pos = cfg.pos or vec3(0.0, 0.0, 0.0)
+-- `pos`: where on the bone it went (its own spot, or one of cfg.spots when that was taken)
+local function attachToPed(entity, ped, cfg, pos)
+	pos = pos or cfg.pos or vec3(0.0, 0.0, 0.0)
 	local rot = cfg.rot or vec3(0.0, 0.0, 0.0)
 	local bone = resolveBone(ped, cfg.bone or 24818)
 
@@ -190,13 +191,17 @@ local function attachToPed(entity, ped, cfg)
 	AttachEntityToEntity(entity, ped, bone, pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, true, true, false, true, 2, true)
 end
 
-local function isHoldingWeapon(serverId, ped, name)
+-- `held`: for the local player, the weapon ox_inventory:currentWeapon just carried (false
+-- for none). That event fires before the inventory's own record changes, so asking
+-- getCurrentWeapon then still gave the gun just put away, and it stayed off the body.
+local function isHoldingWeapon(serverId, ped, name, held)
 	local item = Items(name)
 	local hash = item and item.hash
 	if not hash or not ped then return false end
 
 	if serverId == cache.serverId then
-		local equipped = exports.ox_inventory:getCurrentWeapon()
+		local equipped = held
+		if equipped == nil then equipped = exports.ox_inventory:getCurrentWeapon() end
 		if not equipped or equipped.name ~= name then return false end
 
 		if cache.vehicle then
@@ -209,17 +214,20 @@ local function isHoldingWeapon(serverId, ped, name)
 	return GetSelectedPedWeapon(ped) == hash
 end
 
-local function shouldHide(serverId, ped, name, cfg)
+-- Vehicle classes you sit on, not in: motorcycles, cycles, boats. hideInVehicle doesn't
+-- hide anything on them.
+local OPEN_VEHICLES = { [8] = true, [13] = true, [14] = true }
+
+local function shouldHide(serverId, ped, name, cfg, held)
 	local isWeapon = name:sub(1, 7) == 'WEAPON_'
 	local hideWhenEquipped = cfg.hideWhenEquipped
 	if hideWhenEquipped == nil then hideWhenEquipped = isWeapon end
 
-	if hideWhenEquipped and isHoldingWeapon(serverId, ped, name) then return true end
+	if hideWhenEquipped and isHoldingWeapon(serverId, ped, name, held) then return true end
 
 	if cfg.hideInVehicle then
-		if serverId == cache.serverId then
-			if cache.vehicle then return true end
-		elseif IsPedInAnyVehicle(ped, false) then
+		local vehicle = serverId == cache.serverId and cache.vehicle or GetVehiclePedIsIn(ped, false)
+		if vehicle and vehicle ~= 0 and not OPEN_VEHICLES[GetVehicleClass(vehicle)] then
 			return true
 		end
 	end
@@ -227,16 +235,61 @@ local function shouldHide(serverId, ped, name, cfg)
 	return false
 end
 
-local function ensureAttachment(serverId, ped, name, cfg, meta)
+-- Two things on one bone within this of each other are in the same spot (guns 7 cm apart
+-- sit in each other; spots 11 cm apart don't)
+local SPOT_RADIUS = 0.1
+
+local function spotTaken(taken, bone, pos)
+	for i = 1, #taken do
+		if taken[i].bone == bone and #(taken[i].pos - pos) < SPOT_RADIUS then return true end
+	end
+	return false
+end
+
+-- Where each shown item goes, in inventory slot order (so every client agrees): its own
+-- spot, else the first free one of cfg.spots; with none free it isn't shown.
+local function placeAll(names, payload)
+	table.sort(names, function(a, b)
+		local sa, sb = payload[a].slot or 999, payload[b].slot or 999
+		if sa ~= sb then return sa < sb end
+		return a < b
+	end)
+
+	local taken, places = {}, {}
+
+	for i = 1, #names do
+		local cfg = Config[names[i]]
+		local bone = cfg.bone or 24818
+		local pos = cfg.pos or vec3(0.0, 0.0, 0.0)
+
+		if spotTaken(taken, bone, pos) then
+			pos = nil
+			for _, spot in ipairs(cfg.spots or {}) do
+				if not spotTaken(taken, bone, spot) then pos = spot break end
+			end
+		end
+
+		if pos then
+			taken[#taken + 1] = { bone = bone, pos = pos }
+			places[names[i]] = pos
+		end
+	end
+
+	return places
+end
+
+local function ensureAttachment(serverId, ped, name, cfg, meta, pos)
 	attached[serverId] = attached[serverId] or {}
 	local byPlayer = attached[serverId]
 	local signature = componentSignature(meta)
 	local current = byPlayer[name]
 
-	-- Re-pin surviving props; GTA often detaches them on vehicle enter/exit
+	-- Re-pin surviving props (GTA often detaches them on vehicle enter/exit), and move one
+	-- whose spot changed (another item freed or took its spot)
 	if current and current.signature == signature and current.entity and DoesEntityExist(current.entity) then
-		if not IsEntityAttachedToEntity(current.entity, ped) then
-			attachToPed(current.entity, ped, cfg)
+		if current.pos ~= pos or not IsEntityAttachedToEntity(current.entity, ped) then
+			attachToPed(current.entity, ped, cfg, pos)
+			current.pos = pos
 		end
 		return
 	end
@@ -273,12 +326,13 @@ local function ensureAttachment(serverId, ped, name, cfg, meta)
 	SetEntityCollision(entity, false, false)
 	SetEntityCompletelyDisableCollision(entity, true, false)
 	SetCanClimbOnEntity(entity, false)
-	attachToPed(entity, ped, cfg)
+	attachToPed(entity, ped, cfg, pos)
 
-	attached[serverId][name] = { entity = entity, signature = signature }
+	attached[serverId][name] = { entity = entity, signature = signature, pos = pos }
 end
 
-local function refreshPlayer(serverId, payload)
+---@param held? table | false the local player's weapon from ox_inventory:currentWeapon (false: none)
+local function refreshPlayer(serverId, payload, held)
 	local ped = pedFor(serverId)
 	if not ped then
 		clearPlayer(serverId)
@@ -286,17 +340,23 @@ local function refreshPlayer(serverId, payload)
 	end
 
 	payload = payload or {}
-	local owned = {}
+	local owned, shown = {}, {}
 
-	for name, meta in pairs(payload) do
+	for name in pairs(payload) do
 		local cfg = Config[name]
 		if cfg then
 			owned[name] = true
-			if shouldHide(serverId, ped, name, cfg) then
-				deleteAttachment(serverId, name)
-			else
-				ensureAttachment(serverId, ped, name, cfg, meta)
-			end
+			if not shouldHide(serverId, ped, name, cfg, held) then shown[#shown + 1] = name end
+		end
+	end
+
+	local places = placeAll(shown, payload)
+
+	for name in pairs(owned) do
+		if places[name] then
+			ensureAttachment(serverId, ped, name, Config[name], payload[name], places[name])
+		else
+			deleteAttachment(serverId, name)
 		end
 	end
 
@@ -334,8 +394,8 @@ AddStateBagChangeHandler('ox_attachments', nil, function(bagName, _, value)
 	refreshPlayer(serverId, value)
 end)
 
-AddEventHandler('ox_inventory:currentWeapon', function()
-	refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
+AddEventHandler('ox_inventory:currentWeapon', function(weapon)
+	refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments, weapon or false)
 end)
 
 lib.onCache('ped', function()
@@ -356,13 +416,14 @@ CreateThread(function()
 	while true do
 		Wait(500)
 
+		-- The local player every time, also with nothing on: re-pin props GTA detached, and
+		-- put back anything hidden while a weapon was in hand
+		refreshPlayer(cache.serverId, LocalPlayer.state.ox_attachments)
+
 		for serverId in pairs(attached) do
 			if serverId ~= cache.serverId then
 				local player = Player(serverId)
 				refreshPlayer(serverId, player and player.state and player.state.ox_attachments)
-			else
-				-- Re-pin local props if GTA detached them
-				refreshPlayer(serverId, LocalPlayer.state.ox_attachments)
 			end
 		end
 

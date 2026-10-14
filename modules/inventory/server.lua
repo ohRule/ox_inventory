@@ -1697,6 +1697,10 @@ local function dropItem(source, playerInventory, fromData, data)
 
 	if server.syncInventory then server.syncInventory(playerInventory) end
 
+	-- What's on the body goes with it (a drop answers the page itself, not through
+	-- syncSlotsWithPlayer, which is what sends the body props)
+	require('modules.attachments.server').sync(playerInventory)
+
 	return true, {
 		weight = playerInventory.weight,
 		items = {
@@ -2170,6 +2174,7 @@ function Inventory.Confiscate(source)
 	TriggerClientEvent('ox_inventory:inventoryConfiscated', inv.id)
 
 	if server.syncInventory then server.syncInventory(inv) end
+	require('modules.attachments.server').sync(inv) -- nothing left on the body either
 end
 exports('ConfiscateInventory', Inventory.Confiscate)
 
@@ -2209,6 +2214,7 @@ function Inventory.Return(source)
     TriggerClientEvent('ox_inventory:inventoryReturned', source, { inventory, totalWeight })
 
     if server.syncInventory then server.syncInventory(inv) end
+    require('modules.attachments.server').sync(inv) -- and back on the body
 end
 
 exports('ReturnInventory', Inventory.Return)

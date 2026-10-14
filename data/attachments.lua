@@ -7,7 +7,12 @@
 -- pos / rot: offset from that bone
 -- model: optional prop hash/name; weapons default to GetWeapontypeModel
 -- hideWhenEquipped: default true for WEAPON_* items
--- hideInVehicle: optional; default false (keep props visible in cars)
+-- hideInVehicle: optional; default false (keep props visible in cars). When true, hidden in a
+--   vehicle, but not on a motorcycle, cycle or boat
+-- spots: optional; other places on the same bone (vec3s), tried in order when its own place
+--   is taken by an item in an earlier slot; with none free it isn't shown
+-- hideWithHolster: optional; not shown while a holster is in its Wearables slot (for pistols,
+--   when the holster shows the pistol)
 
 return {
 	['WEAPON_SPECIALCARBINE_MK2'] = {
