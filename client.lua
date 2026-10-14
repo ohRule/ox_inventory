@@ -1693,6 +1693,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			image = v.client?.image,
 			weapon = v.weapon,
 			wearable = v.wearable,
+			component = v.component, -- dropped on a gun, it's fitted (fitAttachment)
 		}
 	end
 
@@ -2212,6 +2213,57 @@ end)
 RegisterNUICallback('useItem', function(slot, cb)
 	useSlot(slot --[[@as number]])
 	cb(1)
+end)
+
+-- An attachment dropped on a gun (in the pockets or on its hotbar key) is fitted to that
+-- gun, drawn or not: the same checks, bar and server step as using it with the gun drawn.
+RegisterNUICallback('fitAttachment', function(data, cb)
+	cb(1)
+
+	local part = type(data) == 'table' and PlayerData.inventory[tonumber(data.component)]
+	local gun = type(data) == 'table' and PlayerData.inventory[tonumber(data.weapon)]
+	if not part or not gun then return end
+
+	local partData, gunData = Items[part.name], Items[gun.name]
+	if not partData or not partData.component or not gunData or not gunData.weapon then return end
+
+	local components = partData.client and partData.client.component
+	if not components then return end
+
+	local label = part.metadata?.label or partData.label
+	local weaponComponents = gun.metadata?.components or {}
+
+	-- Preconfigured attachments cannot be changed
+	if #weaponComponents > 0 then
+		return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
+	end
+
+	for i = 1, #components do
+		local component = components[i]
+
+		if DoesWeaponTakeWeaponComponent(gunData.hash, component) then
+			local drawn = currentWeapon and currentWeapon.slot == gun.slot
+
+			if drawn and HasPedGotWeaponComponent(playerPed, currentWeapon.hash, component) then
+				return lib.notify({ id = 'component_has', type = 'error', description = locale('component_has', label) })
+			end
+
+			partData.slot = part.slot
+
+			return useItem(partData, function(result)
+				if not result then return end
+
+				local success = lib.callback.await('ox_inventory:updateWeapon', false, 'component', tostring(part.slot), gun.slot)
+
+				if success and currentWeapon and currentWeapon.slot == gun.slot then
+					GiveWeaponComponentToPed(playerPed, currentWeapon.hash, component)
+					TriggerEvent('ox_inventory:updateWeaponComponent', 'added', component, part.name)
+				end
+			end)
+		end
+	end
+
+	lib.notify({ id = 'component_invalid', type = 'error', description = locale('component_invalid', label) })
 end)
 
 RegisterNUICallback('bindHotbar', function(data, cb)

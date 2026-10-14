@@ -9,6 +9,8 @@ import { onBindHotbar, onSwapHotbar, onUnbindHotbar } from '../../dnd/onHotbar';
 import { HotbarBind } from '../../store/hotbar';
 import { selectLeftInventory } from '../../store/inventory';
 import { selectShowDurability } from '../../store/uiOptions';
+import { Items } from '../../store/items';
+import { fetchNui } from '../../utils/fetchNui';
 
 interface Props {
   index: number;
@@ -70,6 +72,12 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, missing = false, activ
 
         if (source.inventory !== InventoryType.PLAYER || !source.item.name) return;
 
+        // An attachment dropped on a gun's key is fitted to that gun instead of taking the key
+        if (Items[source.item.name]?.component && item && !missing && Items[item.name]?.weapon) {
+          fetchNui('fitAttachment', { component: source.item.slot, weapon: item.slot });
+          return;
+        }
+
         const sourceItem = leftItems[source.item.slot - 1];
         onBindHotbar(index, {
           slot: source.item.slot,
@@ -78,7 +86,7 @@ const HotbarSlot: React.FC<Props> = ({ index, bind, item, missing = false, activ
         });
       },
     }),
-    [index, leftItems, interactive]
+    [index, leftItems, interactive, item, missing]
   );
 
   const connectRef = (element: HTMLDivElement | null) => {

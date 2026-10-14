@@ -11,4 +11,6 @@ export type ItemData = {
   image?: string;
   weapon?: boolean | number;
   wearable?: string;
+  // An attachment: dropped on a gun, it's fitted to it
+  component?: boolean;
 };
