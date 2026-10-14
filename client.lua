@@ -1936,6 +1936,10 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 	local DisablePlayerVehicleRewards = DisablePlayerVehicleRewards
 	local DisableAllControlActions = DisableAllControlActions
 	local HideHudAndRadarThisFrame = HideHudAndRadarThisFrame
+	local HideHudComponentThisFrame = HideHudComponentThisFrame
+	local DisplayHudWhenPausedThisFrame = DisplayHudWhenPausedThisFrame
+	-- Every HUD component but the minimap, which isn't one
+	local HUD_COMPONENTS = { 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 19 }
 	local EnableControlAction = EnableControlAction
 	local DisablePlayerFiring = DisablePlayerFiring
 	local HudWeaponWheelIgnoreSelection = HudWeaponWheelIgnoreSelection
@@ -1948,7 +1952,17 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 
 		if invOpen then
 			DisableAllControlActions(0)
-			HideHudAndRadarThisFrame()
+
+			-- With the GPS in the watch slot the minimap stays up in every tab. Wearables'
+			-- preview is a pause menu, which draws no HUD unless told to each frame.
+			if client.gpsWorn then
+				for i = 1, #HUD_COMPONENTS do
+					HideHudComponentThisFrame(HUD_COMPONENTS[i])
+				end
+				DisplayHudWhenPausedThisFrame()
+			else
+				HideHudAndRadarThisFrame()
+			end
 
 			for i = 1, #EnableKeys do
 				EnableControlAction(0, EnableKeys[i], true)
