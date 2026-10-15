@@ -2868,7 +2868,18 @@ RegisterNUICallback('unlockCraftRecipe', function(data, cb)
 	local id, index = currentInventory.id, currentInventory.index
 	local success = lib.callback.await('ox_inventory:unlockCraftRecipe', 200, id, data.recipeSlot, data.method)
 	if success then
-		client.openInventory('crafting', { id = id, index = index })
+		-- The bench is already open, so openInventory refused it ("already open") and the
+		-- tree changed only on opening it again: its data is fetched and updated in place.
+		local benchData = lib.callback.await('ox_inventory:getCraftingBenchData', 200, id, index)
+		if benchData and currentInventory.type == 'crafting' and currentInventory.id == id then
+			currentInventory.items = benchData.items or currentInventory.items
+			currentInventory.slots = benchData.slots or currentInventory.slots
+			currentInventory.techTree = benchData.techTree or false
+			currentInventory.unlockScrapItem = benchData.unlockScrapItem
+			currentInventory.treeRootSlots = benchData.treeRootSlots
+			currentInventory.treeChildren = benchData.treeChildren
+			SendNUIMessage({ action = 'setupInventory', data = { rightInventory = currentInventory } })
+		end
 	else
 		lib.notify({ type = 'error', description = locale('recipe_locked') })
 	end

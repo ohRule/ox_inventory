@@ -58,6 +58,67 @@ local function hideClone(ped, relocate)
 	NetworkSetEntityInvisibleToNetwork(ped, true)
 end
 
+-- With the GPS in the watch slot the minimap stays up on every page, and the game draws
+-- no minimap under a pause menu, however it's asked. So then the character is shown
+-- through a camera on the player instead (on foot; in a vehicle, none), and the minimap
+-- carries on. Without the GPS it's the pause-menu copy as before.
+local CAM = { dist = 4.0, side = 0.9, height = 0.25, view = 3.0 }
+local camPreview
+local camBlur = false
+local onWearables, storageOpen = false, false
+
+-- In front of the player and to their right, looking straight back at them, so they stand
+-- right of the middle of the screen, past the slots. Something in the way (a wall, a car)
+-- brings the camera in, and it widens to keep them the same size.
+local function cameraSpot(ped)
+	local pos = GetEntityCoords(ped)
+	local h = math.rad(GetEntityHeading(ped))
+	local fx, fy = -math.sin(h), math.cos(h)
+	local rx, ry = math.cos(h), math.sin(h)
+	local z = pos.z + CAM.height
+	local from = vec3(pos.x, pos.y, z)
+	local want = vec3(pos.x + fx * CAM.dist + rx * CAM.side, pos.y + fy * CAM.dist + ry * CAM.side, z)
+
+	local scale = 1.0
+	-- 19: the map, vehicles and objects; 7: not glass, see-through or no-collision
+	local ray = StartExpensiveSynchronousShapeTestLosProbe(from.x, from.y, from.z, want.x, want.y, want.z, 19, ped, 7)
+	local _, hit, at = GetShapeTestResult(ray)
+	if hit and hit ~= 0 and at then
+		scale = math.max(0.2, (#(at - from) - 0.3) / #(want - from))
+	end
+
+	local d, s = CAM.dist * scale, CAM.side * scale
+	local camAt = vec3(pos.x + fx * d + rx * s, pos.y + fy * d + ry * s, z)
+	local lookAt = vec3(pos.x + rx * s, pos.y + ry * s, z)
+	local fov = math.min(90.0, math.deg(2 * math.atan((CAM.view / 2) / d)))
+	return camAt, lookAt, fov
+end
+
+local function startCameraPreview()
+	if camPreview or cache.vehicle then return end
+
+	local camAt, lookAt, fov = cameraSpot(cache.ped or PlayerPedId())
+	camPreview = CreateCamWithParams('DEFAULT_SCRIPTED_CAMERA', camAt.x, camAt.y, camAt.z, 0.0, 0.0, 0.0, fov, false, 2)
+	PointCamAtCoord(camPreview, lookAt.x, lookAt.y, lookAt.z)
+	SetCamActive(camPreview, true)
+	RenderScriptCams(true, true, 300, true, false)
+
+	camBlur = client.screenblur == true
+	if camBlur then Utils.blurOut() end
+end
+
+local function stopCameraPreview()
+	if not camPreview then return end
+
+	RenderScriptCams(false, true, 300, true, false)
+	SetCamActive(camPreview, false)
+	DestroyCam(camPreview, false)
+	camPreview = nil
+
+	if camBlur and client.screenblur then Utils.blurIn() end
+	camBlur = false
+end
+
 local function restorePauseBg()
 	-- Default pause-menu overlay colour
 	ReplaceHudColourWithRgba(HUD_PAUSE_BG, 0, 0, 0, 186)
@@ -73,6 +134,7 @@ local function armIgnoreExit()
 end
 
 local function stopWearablesPreview()
+	stopCameraPreview()
 	previewGen += 1
 
 	if not previewActive then
@@ -169,6 +231,7 @@ end
 
 ---Pause-menu clone ped (studio lighting) instead of a scripted cam on the real player.
 local function startWearablesPreview()
+	if client.gpsWorn then return startCameraPreview() end
 	if previewActive then return end
 
 	previewActive = true
@@ -248,7 +311,9 @@ RegisterNUICallback('setRightPanelMode', function(data, cb)
 	cb(1)
 
 	local mode = data and data.mode
-	if mode == 'wearables' then
+	onWearables = mode == 'wearables'
+	storageOpen = false
+	if onWearables then
 		startWearablesPreview()
 	else
 		stopWearablesPreview()
@@ -260,6 +325,15 @@ RegisterNUICallback('setWearablesPedVisible', function(data, cb)
 	cb(1)
 
 	local visible = not data or data.visible ~= false
+	storageOpen = not visible
+
+	-- The camera kind: away while the storage is up, back after, and only on this page
+	-- (leaving it also says "visible")
+	if camPreview or client.gpsWorn then
+		if visible and onWearables then startCameraPreview() else stopCameraPreview() end
+		return
+	end
+
 	if not previewActive then return end
 	pedHidden = not visible -- no refreshing while it's put away
 
@@ -284,7 +358,14 @@ end)
 -- Watch slot GPS: keep the minimap on while equipped.
 RegisterNetEvent('ox_inventory:wearableEquipped', function(equipped)
 	local gpsOn = equipped and equipped.watch == 'gps'
+	local was = client.gpsWorn == true
 	client.gpsWorn = gpsOn and true or false -- the inventory keeps the minimap up while open
+
+	-- Put on or taken off with Wearables open: the other kind of preview
+	if onWearables and not storageOpen and was ~= client.gpsWorn then
+		stopWearablesPreview()
+		startWearablesPreview()
+	end
 	if GetResourceState('ruck_hud') == 'started' then
 		pcall(function()
 			exports.ruck_hud:setGPS(gpsOn)

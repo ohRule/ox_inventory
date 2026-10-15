@@ -173,6 +173,11 @@ local function startSearch(source, inv)
 	CreateThread(function()
 		local delay = Config.searchDelay or 550
 
+		-- Started as the crate opens, the first reveal could reach the player before the
+		-- crate's window did: the page dropped it, then ignored slot 1's item as never
+		-- searched, so slot 1 stayed blank and the search seemed to start at slot 2.
+		Wait(delay)
+
 		for slot = 1, inv.slots do
 			local playerInv = Inventory(source)
 			if not playerInv or playerInv.open ~= inv.id then break end
