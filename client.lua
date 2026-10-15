@@ -1047,8 +1047,9 @@ local function useSlot(slot, noAnim)
 				local weaponMetadata = PlayerData.inventory[currentWeapon.slot].metadata
 				local weaponComponents = weaponMetadata.components or {}
 
-				-- A job kit's gun (metadata.loadout) stays as it came; any other takes attachments
-				if weaponMetadata.loadout then
+				-- A job kit's gun (metadata.loadout) or the vehicle armoury's (metadata.armoury)
+				-- stays as it came; any other takes attachments
+				if weaponMetadata.loadout or weaponMetadata.armoury then
 					return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
 				end
 
@@ -2363,8 +2364,9 @@ RegisterNUICallback('removeComponent', function(data, cb)
 
 	local itemSlot = data.slot and PlayerData.inventory[data.slot]
 
-	-- A job kit's gun (metadata.loadout) keeps the attachments it came with
-	if itemSlot?.metadata?.loadout then
+	-- A job kit's gun (metadata.loadout) or the vehicle armoury's (metadata.armoury) keeps
+	-- the attachments it came with
+	if itemSlot?.metadata?.loadout or itemSlot?.metadata?.armoury then
 		return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
 	end
 
@@ -2426,8 +2428,9 @@ RegisterNUICallback('fitAttachment', function(data, cb)
 	local label = part.metadata?.label or partData.label
 	local weaponComponents = gun.metadata?.components or {}
 
-	-- A job kit's gun (metadata.loadout) stays as it came, as with Use
-	if gun.metadata?.loadout then
+	-- A job kit's gun (metadata.loadout) or the vehicle armoury's (metadata.armoury) stays
+	-- as it came, as with Use
+	if gun.metadata?.loadout or gun.metadata?.armoury then
 		return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
 	end
 

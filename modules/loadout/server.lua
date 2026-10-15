@@ -277,6 +277,7 @@ local function seedArmoury(playerInv, armoury)
 
 			while remaining > 0 do
 				local metadata, count = Items.Metadata(playerInv, item, entry.metadata and table.clone(entry.metadata) or {}, remaining)
+				if item.weapon then metadata.armoury = armoury.id end
 				slot += 1
 				local data = {
 					name = item.name,
@@ -296,6 +297,22 @@ local function seedArmoury(playerInv, armoury)
 	end
 
 	return items, allowed, slot
+end
+
+---The armoury's guns keep the attachments they came with (metadata.armoury, checked
+---wherever attachments go on or come off, as a job kit's metadata.loadout is). Marks the
+---guns of stock saved before it was a rule, or put back without it.
+---@param inv OxInventory
+---@param armoury table
+local function markGuns(inv, armoury)
+	for _, item in pairs(inv.items) do
+		local data = Items(item.name)
+
+		if data and data.weapon and item.metadata and not item.metadata.armoury then
+			item.metadata.armoury = armoury.id
+			inv.changed = true
+		end
+	end
 end
 
 ---@param armoury table
@@ -334,6 +351,7 @@ local function ensureArmoury(source, netId)
 		inv.armouryItems = inv.armouryItems or allowedItems(armoury)
 		inv.coords = GetEntityCoords(entity)
 		inv.distance = Config.distance or 2.5
+		markGuns(inv, armoury)
 		return inv
 	end
 
@@ -355,6 +373,7 @@ local function ensureArmoury(source, netId)
 	inv.coords = GetEntityCoords(entity)
 	inv.distance = Config.distance or 2.5
 	inv.changed = not saved
+	markGuns(inv, armoury)
 
 	return inv
 end

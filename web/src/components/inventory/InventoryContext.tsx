@@ -104,8 +104,8 @@ const InventoryContext: React.FC = () => {
             label={Locale.ui_copy}
           />
         )}
-        {/* A job kit's gun (metadata.loadout) keeps its attachments */}
-        {item && !item.metadata?.loadout && item.metadata?.components && item.metadata?.components.length > 0 && (
+        {/* A job kit's gun (metadata.loadout) or the vehicle armoury's (metadata.armoury) keeps its attachments */}
+        {item && !item.metadata?.loadout && !item.metadata?.armoury && item.metadata?.components && item.metadata?.components.length > 0 && (
           <Menu label={Locale.ui_removeattachments}>
             {item.metadata?.components.map((component: string, index: number) => (
               <MenuItem

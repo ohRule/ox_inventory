@@ -2745,10 +2745,11 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 
 	if vtype == 'table' and action == 'component' then
 		-- An attachment taken off a gun that isn't in hand. A job kit's gun
-		-- (metadata.loadout) keeps the ones it came with.
+		-- (metadata.loadout) or the vehicle armoury's (metadata.armoury) keeps the ones
+		-- it came with.
 		local item = inventory.items[value.slot]
 
-		if item and item.metadata.components and not item.metadata.loadout then
+		if item and item.metadata.components and not (item.metadata.loadout or item.metadata.armoury) then
 			for k, v in pairs(item.metadata.components) do
 				if v == value.component then
 					if not Inventory.AddItem(inventory, value.component, 1) then return false end
@@ -2820,8 +2821,9 @@ local function updateWeapon(source, action, value, slot, specialAmmo)
 			elseif action == 'throw' then
 				if not Inventory.RemoveItem(inventory, weapon.name, 1, weapon.metadata, weapon.slot) then return end
 			elseif action == 'component' then
-				-- A job kit's gun (metadata.loadout) stays as it came
-				if weapon.metadata.loadout then
+				-- A job kit's gun (metadata.loadout) or the vehicle armoury's
+				-- (metadata.armoury) stays as it came
+				if weapon.metadata.loadout or weapon.metadata.armoury then
 					return false
 				end
 
