@@ -534,10 +534,14 @@ local function refusedUse(data, why, quiet)
 			and locale('fit_refused', label, why) or locale('use_refused', label, why) })
 	end
 
-	print(('[ox_inventory] use of %s refused: %s (usingItem %s for %d ms, loaded %s, dead %s, invBusy %s, progress %s, weapon %s, timer %s)'):format(
-		data.name, why, tostring(usingItem), usingItem and GetGameTimer() - usingSince or 0,
-		tostring(PlayerData.loaded), tostring(PlayerData.dead), tostring(invBusy), tostring(lib.progressActive()),
-		currentWeapon and currentWeapon.name or 'none', tostring(currentWeapon and currentWeapon.timer)))
+	-- Only a log line, so it must never stop the Use it reports on. lib.progressActive is
+	-- ox_lib's export, which hands back no value at all (not even nil) when no bar is up.
+	pcall(function()
+		print(('[ox_inventory] use of %s refused: %s (usingItem %s for %d ms, loaded %s, dead %s, invBusy %s, progress %s, weapon %s, timer %s)'):format(
+			data.name, why, tostring(usingItem), usingItem and GetGameTimer() - usingSince or 0,
+			tostring(PlayerData.loaded), tostring(PlayerData.dead), tostring(invBusy), tostring(lib.progressActive() or false),
+			currentWeapon and currentWeapon.name or 'none', tostring(currentWeapon and currentWeapon.timer)))
+	end)
 end
 
 ---@param data { name: string, label: string, count: number, slot: number, metadata: table<string, any>, weight: number }
