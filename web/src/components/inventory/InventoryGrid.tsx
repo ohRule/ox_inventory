@@ -82,6 +82,20 @@ const InventoryGrid: React.FC<{ inventory: Inventory }> = ({ inventory }) => {
         )}
       </div>
       <div className="inventory-grid-container" ref={containerRef}>
+        {/* Someone searched or robbed: what they're wearing first, each labelled */}
+        {inventory.type === 'otherplayer' &&
+          inventory.bagSlots &&
+          inventory.items.slice(inventory.bagSlots, inventory.slots).map((item, index) => (
+            <div key={`worn-${inventory.id}-${item.slot}`} className="inventory-slot-worn">
+              <InventorySlot
+                item={item}
+                inventoryType={inventory.type}
+                inventoryGroups={inventory.groups}
+                inventoryId={inventory.id}
+              />
+              <span className="inventory-slot-worn-label">{inventory.wearableIds?.[index] ?? ''}</span>
+            </div>
+          ))}
         {inventory.items
           .slice(0, inventory.bagSlots ?? inventory.slots)
           .slice(0, (page + 1) * PAGE_SIZE)

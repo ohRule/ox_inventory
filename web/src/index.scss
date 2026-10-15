@@ -439,6 +439,29 @@ body.inv-dragging {
   }
 }
 
+// A searched or robbed player's worn gear: the first row, outlined, its slot named
+.inventory-slot-worn {
+  position: relative;
+
+  > .inventory-slot {
+    width: 100%;
+    height: 100%;
+    border-color: rgba(var(--inv-highlight), 0.6);
+  }
+}
+
+.inventory-slot-worn-label {
+  position: absolute;
+  top: 0.4vh;
+  right: 0.6vh;
+  font-family: $mainFont;
+  font-size: 1vh;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(232, 232, 232, 0.6);
+  pointer-events: none;
+}
+
 .inventory-grid-container {
   display: grid;
   width: $gridWidth;

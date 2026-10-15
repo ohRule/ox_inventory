@@ -399,6 +399,9 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
         label = right.player and '' or right.label,
         type = right.player and 'otherplayer' or right.type,
         slots = right.slots,
+        -- Someone searched or robbed: where their Wearables start, so the page shows them
+        bagSlots = right.player and right.bagSlots or nil,
+        wearableIds = right.player and require('modules.wearables.shared') or nil,
         weight = right.weight,
         maxWeight = right.type == 'lootprop' and nil or right.maxWeight,
         items = right.type == 'lootprop' and (require 'modules.loot.server').visibleItems(right, source) or right.items,
