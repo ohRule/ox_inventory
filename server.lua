@@ -83,6 +83,9 @@ function server.setPlayerInventory(player, data)
         if server.syncInventory then server.syncInventory(inv) end
 
         require('modules.wearables.server').apply(inv)
+        -- Gear: anything in a Wearables slot that doesn't belong there goes to the pockets
+        local Gear = require 'modules.gear.server'
+        Gear.sortLoaded(inv)
         require('modules.wearables.server').syncEquipped(inv)
         require('modules.attachments.server').sync(inv)
 
@@ -91,6 +94,9 @@ function server.setPlayerInventory(player, data)
 
         TriggerClientEvent('ox_inventory:setPlayerInventory', player.source, Inventory.Drops, inventory, totalWeight,
             inv.player, hotbar)
+
+        -- The weight limit (a bag) and armour (a carrier) from what's worn
+        Gear.apply(inv)
     end
 end
 
@@ -909,4 +915,5 @@ require 'modules.ammobox.server'
 require 'modules.magload.server'
 require 'modules.loadout.server'
 require 'modules.wearables.server'
+require 'modules.gear.server'
 require 'modules.attachments.server'

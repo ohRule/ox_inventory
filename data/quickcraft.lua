@@ -10,6 +10,17 @@ return {
 		duration = 5000,
 		count = 10,
 	},
+	-- A makeshift plate carrier (data/gear.lua)
+	{
+		name = 'platecarrier_makeshift',
+		category = 'tools',
+		ingredients = {
+			clothe = 8,
+			scrapmetal = 6,
+		},
+		duration = 8000,
+		count = 1,
+	},
 	{
 		name = 'lockpick',
 		category = 'tools',

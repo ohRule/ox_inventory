@@ -2095,6 +2095,13 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 				Wearables.syncEquipped(toInventory)
 			end
 
+			-- Gear: the weight limit and armour follow what's worn, and a worn carrier's plates
+			-- (its container, open beside the pockets of the player moving them)
+			local Gear = require 'modules.gear.server'
+			Gear.apply(playerInventory)
+			if fromInventory.player and fromInventory ~= playerInventory then Gear.apply(fromInventory) end
+			if toInventory.player and toInventory ~= playerInventory and toInventory ~= fromInventory then Gear.apply(toInventory) end
+
             CreateThread(function()
                 if sameInventory then
                     fromInventory:syncSlotsWithClients({

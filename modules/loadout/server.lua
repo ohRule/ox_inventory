@@ -131,6 +131,30 @@ local function canCarryKit(inv, kit)
 	return true
 end
 
+---A kit item that comes filled (`contents`, e.g. a plate carrier with its plates): the
+---contents go in its container, tagged with the kit like everything else in it, so they
+---can't be kept or passed on either.
+---@param added table | table[] what AddItem gave back: the slot, or a list of slots
+---@param contents { name: string, count?: number }[]
+---@param kitId string
+local function fillContainers(added, contents, kitId)
+	local list = type(added) == 'table' and (added.name and { added } or added) or {}
+
+	for _, item in ipairs(list) do
+		local id = item.metadata and item.metadata.container
+		local size = item.metadata and item.metadata.size
+
+		if id and size then
+			local inside = Inventory(id) or Inventory.Create(id, item.label, 'container', size[1], 0, size[2], false)
+
+			for i = 1, #contents do
+				local content = contents[i]
+				if inside then Inventory.AddItem(inside, content.name, content.count or 1, { loadout = kitId }) end
+			end
+		end
+	end
+end
+
 ---@param inv OxInventory
 ---@param kit table
 ---@return boolean, string?
@@ -146,11 +170,13 @@ local function giveKit(inv, kit)
 		local metadata = entry.metadata and table.clone(entry.metadata) or {}
 		metadata.loadout = kit.id
 
-		local success = Inventory.AddItem(inv, entry.name, entry.count or 1, metadata)
+		local success, added = Inventory.AddItem(inv, entry.name, entry.count or 1, metadata)
 		if not success then
 			stripLoadout(inv, true)
 			return false, 'cannot_carry'
 		end
+
+		if entry.contents then fillContainers(added, entry.contents, kit.id) end
 	end
 
 	return true

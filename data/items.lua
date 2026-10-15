@@ -182,9 +182,11 @@ return {
 		close = false,
 		consume = 0,
 		wearable = 'backpack',
+		description = 'A proper pack. Wear it in the backpack slot.',
 	},
 
-	-- Empty carrier for the wearables armour slot (plates go in its storage later)
+	-- Plate carriers for the wearables armour slot: the armour is the plates inside
+	-- (data/gear.lua). Open one from the Wearables tab to put plates in.
 	['platecarrier'] = {
 		label = 'Plate Carrier',
 		weight = 2000,
@@ -192,6 +194,7 @@ return {
 		close = false,
 		consume = 0,
 		wearable = 'armour',
+		description = 'Three plate pockets: kevlar (17 each), ceramic (25) or steel (34). Wear it in the armour slot and open it from Wearables.',
 		client = {
 			image = 'armour.png',
 		},
@@ -490,5 +493,124 @@ return {
 		weight = 1,
 		stack = true,
 		close = true,
+	},
+
+	-- Gear (modules/gear, data/gear.lua): bags, masks, plate carriers and plates, the holster.
+	['backpack_small'] = {
+		label = 'Small Backpack',
+		weight = 600,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'backpack',
+		description = 'Room for a few things. Wear it in the backpack slot.',
+	},
+
+	['duffel_bag'] = {
+		label = 'Duffel Bag',
+		weight = 1500,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'backpack',
+		description = 'Big enough for a job. Wear it in the backpack slot.',
+		client = { image = 'bag.png' },
+	},
+
+	['respirator'] = {
+		label = 'Respirator',
+		weight = 400,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'mask',
+		description = 'Wear it in the mask slot: tear gas and BZ cannot get to you.',
+	},
+
+	['gasmask'] = {
+		label = 'CBRN Mask',
+		weight = 1000,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'mask',
+		description = 'Wear it in the mask slot: tear gas and BZ cannot get to you.',
+	},
+
+	['rebreather'] = {
+		label = 'Rebreather',
+		weight = 1200,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'mask',
+		description = 'Wear it in the mask slot: three minutes of air under water, refilling at the surface.',
+	},
+
+	['platecarrier_pd'] = {
+		label = 'Police Plate Carrier',
+		weight = 1800,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'armour',
+		description = 'Two plate pockets: kevlar (25 each) or ceramic (35). Wear it in the armour slot and open it from Wearables.',
+	},
+
+	['platecarrier_makeshift'] = {
+		label = 'Makeshift Plate Carrier',
+		weight = 1500,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'armour',
+		description = 'Two plate pockets, rough: kevlar (12 each) or steel (20). Wear it in the armour slot and open it from Wearables.',
+	},
+
+	['platecarrier_heavy'] = {
+		label = 'Heavy Plate Carrier',
+		weight = 3200,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'armour',
+		description = 'Three plate pockets: ceramic (30 each) or steel (34). Wear it in the armour slot and open it from Wearables.',
+	},
+
+	['plate_kevlar'] = {
+		label = 'Kevlar Plate',
+		weight = 600,
+		stack = false,
+		close = false,
+		consume = 0,
+		description = 'Light. Goes in a plate carrier; what it gives depends on the carrier. Worn down by hits.',
+	},
+
+	['plate_ceramic'] = {
+		label = 'Ceramic Plate',
+		weight = 1400,
+		stack = false,
+		close = false,
+		consume = 0,
+		description = 'Goes in a plate carrier; what it gives depends on the carrier. Worn down by hits.',
+	},
+
+	['plate_steel'] = {
+		label = 'Steel Plate',
+		weight = 2600,
+		stack = false,
+		close = false,
+		consume = 0,
+		description = 'Heavy. Goes in a plate carrier; what it gives depends on the carrier. Worn down by hits.',
+	},
+
+	['holster'] = {
+		label = 'Holster',
+		weight = 300,
+		stack = false,
+		close = false,
+		consume = 0,
+		wearable = 'holster',
+		description = 'Wear it in the holster slot: pistols draw fast from the hip, and it shows at the small of your back (on a woman, the right hip). Right-click it for a waistband holster or a hip holster.',
 	},
 }

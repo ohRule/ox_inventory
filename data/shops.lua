@@ -63,7 +63,14 @@ return {
 		blip = {
 			id = 402, colour = 69, scale = 0.8
 		}, inventory = {
-			{ name = 'lockpick', price = 10 }
+			{ name = 'lockpick', price = 10 },
+			-- Gear: bags for the backpack slot, masks for the mask slot
+			{ name = 'backpack_small', price = 350 },
+			{ name = 'backpack', price = 900 },
+			{ name = 'duffel_bag', price = 1800 },
+			{ name = 'respirator', price = 250 },
+			{ name = 'gasmask', price = 600 },
+			{ name = 'rebreather', price = 900 },
 		}, locations = {
 			vec3(2748.0, 3473.0, 55.67),
 			vec3(342.99, -1298.26, 32.51)
@@ -80,7 +87,13 @@ return {
 			{ name = 'ammo-9', price = 5, },
 			{ name = 'WEAPON_KNIFE', price = 200 },
 			{ name = 'WEAPON_BAT', price = 100 },
-			{ name = 'WEAPON_PISTOL', price = 1000, metadata = { registered = true }, license = 'weapon' }
+			{ name = 'WEAPON_PISTOL', price = 1000, metadata = { registered = true }, license = 'weapon' },
+			-- Gear: a plate carrier, its plates, and the holster
+			{ name = 'platecarrier', price = 1200 },
+			{ name = 'plate_kevlar', price = 300 },
+			{ name = 'plate_ceramic', price = 600 },
+			{ name = 'plate_steel', price = 1000 },
+			{ name = 'holster', price = 250 },
 		}, locations = {
 			vec3(-662.180, -934.961, 21.829),
 			vec3(810.25, -2157.60, 29.62),
@@ -148,7 +161,8 @@ return {
 			{ name = 'WEAPON_CERAMICPISTOL', price = 50000, metadata = { registered = false }, currency = 'black_money' },
 			{ name = 'at_suppressor_light', price = 50000, currency = 'black_money' },
 			{ name = 'ammo-rifle', price = 1000, currency = 'black_money' },
-			{ name = 'ammo-rifle2', price = 1000, currency = 'black_money' }
+			{ name = 'ammo-rifle2', price = 1000, currency = 'black_money' },
+			{ name = 'platecarrier_heavy', price = 6000, currency = 'black_money' },
 		}, locations = {
 			vec3(309.09, -913.75, 56.46)
 		}, targets = {

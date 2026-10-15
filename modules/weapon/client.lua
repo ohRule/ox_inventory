@@ -23,7 +23,9 @@ function Weapon.Equip(item, data, noWeaponAnim, suppressNotification)
 
 		local anim = data.anim or anims[GetWeapontypeGroup(data.hash)]
 
-		if anim == anims[`GROUP_PISTOL`] and not client.hasGroup(shared.police) then
+		-- Pistols come from the hip, fast, for the police and anyone wearing a holster
+		-- (modules/gear/client.lua); anyone else pulls one from their waistband
+		if anim == anims[`GROUP_PISTOL`] and not client.hasGroup(shared.police) and not client.holsterWorn then
 			anim = nil
 		end
 
@@ -110,7 +112,7 @@ function Weapon.Disarm(currentWeapon, noAnim)
 			local coords = GetEntityCoords(cache.ped, true)
 			local anim = item.anim or anims[GetWeapontypeGroup(currentWeapon.hash)]
 
-			if anim == anims[`GROUP_PISTOL`] and not client.hasGroup(shared.police) then
+			if anim == anims[`GROUP_PISTOL`] and not client.hasGroup(shared.police) and not client.holsterWorn then
 				anim = nil
 			end
 

@@ -1,4 +1,7 @@
 {
+  "gear_style": "Style",
+  "gear_air_low": "Rebreather: 20 seconds of air left",
+  "gear_air_out": "Rebreather: out of air",
   "ui_use": "Use",
   "ui_give": "Give",
   "ui_close": "Close",

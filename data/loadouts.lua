@@ -82,7 +82,7 @@ return {
 				{ name = 'WEAPON_STUNGUN', count = 1, metadata = { registered = true } },
 				{ name = 'WEAPON_NIGHTSTICK', count = 1 },
 				{ name = 'WEAPON_FLASHLIGHT', count = 1 },
-				{ name = 'armour', count = 1 },
+				{ name = 'platecarrier_pd', count = 1, contents = { { name = 'plate_kevlar', count = 2 } } },
 			},
 		},
 		{
@@ -104,7 +104,7 @@ return {
 				{ name = 'WEAPON_FLASHLIGHT', count = 1 },
 				{ name = 'WEAPON_CARBINERIFLE', count = 1, metadata = { registered = true } },
 				{ name = 'ammo-rifle', count = 3 },
-				{ name = 'armour', count = 1 },
+				{ name = 'platecarrier_pd', count = 1, contents = { { name = 'plate_kevlar', count = 2 } } },
 			},
 		},
 		{
