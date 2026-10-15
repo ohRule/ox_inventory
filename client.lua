@@ -522,6 +522,23 @@ end)
 local Animations = lib.load('data.animations')
 local Items = require 'modules.items.client'
 local usingItem = false
+local usingSince = 0 -- when usingItem went on, for refusedUse
+
+-- Wherever a Use stopped without a word, it says why on screen, and prints the state it
+-- was refused in to F8 (and so the client log). `quiet`: the print only (a bar cancelled).
+local function refusedUse(data, why, quiet)
+	local label = data.metadata?.label or data.label or data.name
+
+	if not quiet then
+		lib.notify({ id = 'use_refused', type = 'error', description = data.component
+			and locale('fit_refused', label, why) or locale('use_refused', label, why) })
+	end
+
+	print(('[ox_inventory] use of %s refused: %s (usingItem %s for %d ms, loaded %s, dead %s, invBusy %s, progress %s, weapon %s, timer %s)'):format(
+		data.name, why, tostring(usingItem), usingItem and GetGameTimer() - usingSince or 0,
+		tostring(PlayerData.loaded), tostring(PlayerData.dead), tostring(invBusy), tostring(lib.progressActive()),
+		currentWeapon and currentWeapon.name or 'none', tostring(currentWeapon and currentWeapon.timer)))
+end
 
 ---@param data { name: string, label: string, count: number, slot: number, metadata: table<string, any>, weight: number }
 lib.callback.register('ox_inventory:usingItem', function(data, noAnim)
@@ -581,6 +598,19 @@ lib.callback.register('ox_inventory:usingItem', function(data, noAnim)
 	end
 end)
 
+-- Which of canUseItem's checks said no, for refusedUse
+local function busyReason()
+	local ped = cache.ped
+	return usingItem and locale('refused_using')
+		or not PlayerData.loaded and locale('refused_not_loaded')
+		or PlayerData.dead and locale('refused_down')
+		or invBusy and locale('refused_busy')
+		or lib.progressActive() and locale('refused_progress')
+		or (IsPedRagdoll(ped) or IsPedFalling(ped)) and locale('refused_falling')
+		or IsPedShooting(playerPed) and locale('refused_shooting')
+		or locale('refused_no_gun')
+end
+
 local function canUseItem(isAmmo)
 	local ped = cache.ped
 
@@ -602,15 +632,13 @@ local function useItem(data, cb, noAnim)
 	local slotData, result = PlayerData.inventory[data.slot]
 
 	if not slotData or not canUseItem(data.ammo and true) then
-        if currentWeapon then
-            return lib.notify({ id = 'cannot_perform', type = 'error', description = locale('cannot_perform') })
-        end
-
-        return
+        return refusedUse(data, not slotData and locale('refused_gone') or busyReason())
     end
 
 	if currentWeapon and currentWeapon.timer ~= 0 then
-        if not currentWeapon.timer or currentWeapon.timer - GetGameTimer() > 100 then return end
+        if not currentWeapon.timer or currentWeapon.timer - GetGameTimer() > 100 then
+            return refusedUse(data, locale('refused_gun_not_ready'))
+        end
 
         DisablePlayerFiring(cache.playerId, true)
     end
@@ -618,8 +646,12 @@ local function useItem(data, cb, noAnim)
     if invOpen and data.close then client.closeInventory() end
 
     usingItem = true
+    usingSince = GetGameTimer()
     ---@type boolean?
     result = lib.callback.await('ox_inventory:useItem', 200, data.name, data.slot, slotData.metadata, noAnim)
+
+    -- The server said no, or the bar was cancelled: said for an attachment, printed for the rest
+    if not result then refusedUse(data, locale('refused_cancelled'), not data.component) end
 
 	if result and cb then
 		local success, response = pcall(cb, result and slotData)
@@ -968,7 +1000,7 @@ local function useSlot(slot, noAnim)
 			elseif data.component then
 				local components = data.client.component
 
-                if not components then return end
+                if not components then return refusedUse(data, locale('refused_no_parts')) end
 
 				local componentType = data.type
 				local weaponMetadata = PlayerData.inventory[currentWeapon.slot].metadata
@@ -1016,6 +1048,9 @@ local function useSlot(slot, noAnim)
 		elseif not data.ammo and not data.component then
 			useItem(data)
 		end
+	else
+		-- canUseItem said no, which skipped the item without a word
+		refusedUse(data, busyReason())
     end
 end
 exports('useSlot', useSlot)
@@ -2343,7 +2378,7 @@ RegisterNUICallback('fitAttachment', function(data, cb)
 	if not partData or not partData.component or not gunData or not gunData.weapon then return end
 
 	local components = partData.client and partData.client.component
-	if not components then return end
+	if not components then return refusedUse(partData, locale('refused_no_parts')) end
 
 	local label = part.metadata?.label or partData.label
 	local weaponComponents = gun.metadata?.components or {}
