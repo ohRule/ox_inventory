@@ -135,18 +135,42 @@ local function pedFor(serverId)
 	end
 end
 
+-- A model that didn't load in time isn't asked for again for a while: one that never
+-- loads would otherwise hold up the half-second check below on every pass.
+local LOAD_TIMEOUT, LOAD_RETRY = 5000, 10000
+local loadFailedUntil, loadWarned = {}, {}
+
+local function loadRefused(model)
+	return (loadFailedUntil[model] or 0) > GetGameTimer()
+end
+
+local function loadFailed(model, name)
+	loadFailedUntil[model] = GetGameTimer() + LOAD_RETRY
+
+	if not loadWarned[name] then
+		loadWarned[name] = true
+		print(('[ox_inventory] body prop for %s did not load within %d ms; trying again every %d s'):format(name, LOAD_TIMEOUT, LOAD_RETRY // 1000))
+	end
+end
+
 local function createWeaponProp(name, meta)
 	local item = Items(name)
 	local weaponHash = item and item.hash
-	if not weaponHash then return end
+	if not weaponHash or loadRefused(weaponHash) then return end
 
 	RequestWeaponAsset(weaponHash, 31, 0)
 
-	local loaded = lib.waitFor(function()
+	-- lib.waitFor throws when it runs out of time rather than returning nil. Unguarded, that
+	-- left the prop marked pending for good (it never showed again) and, thrown inside the
+	-- half-second check, stopped that check for the rest of the session.
+	local loaded = pcall(lib.waitFor, function()
 		return HasWeaponAssetLoaded(weaponHash) or nil
-	end, nil, 2000)
+	end, nil, LOAD_TIMEOUT)
 
-	if not loaded then return end
+	if not loaded then
+		RemoveWeaponAsset(weaponHash)
+		return loadFailed(weaponHash, name)
+	end
 
 	local coords = GetEntityCoords(cache.ped)
 	-- Local object: every client draws their own copy (components sync correctly this way)
@@ -172,7 +196,12 @@ local function createObjectProp(name, cfg)
 		model = item and item.hash or joaat(name)
 	end
 
-	if not lib.requestModel(model, 2000) then return end
+	if loadRefused(model) then return end
+
+	-- lib.requestModel throws too when the model doesn't load in time
+	if not pcall(lib.requestModel, model, LOAD_TIMEOUT) then
+		return loadFailed(model, name)
+	end
 
 	local coords = GetEntityCoords(cache.ped)
 	local entity = CreateObject(model, coords.x, coords.y, coords.z, false, false, false)
