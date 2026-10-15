@@ -1598,13 +1598,32 @@ end
 AddEventHandler('ox_inventory:customDrop', CustomDrop)
 exports('CustomDrop', CustomDrop)
 
+---A job kit's things (metadata.loadout) never go to anyone else (see loadoutMayGo), so
+---they stay with the player when the rest of their things are left on the ground.
+local function isKitItem(item)
+	return item.metadata?.loadout ~= nil
+end
+
 exports('CreateDropFromPlayer', function(playerId)
 	local playerInventory = Inventory(playerId)
 
 	if not playerInventory or not next(playerInventory.items) then return end
 
+	local items, weight, kitKept = {}, 0, false
+
+	for slot, item in pairs(playerInventory.items) do
+		if isKitItem(item) then
+			kitKept = true
+		else
+			items[slot] = item
+			weight += item.weight
+		end
+	end
+
+	if not next(items) then return end
+
 	local dropId = generateInvId()
-	local inventory = Inventory.Create(dropId, ('Drop %s'):format(dropId:gsub('%D', '')), 'drop', playerInventory.slots, playerInventory.weight, playerInventory.maxWeight, false, table.clone(playerInventory.items))
+	local inventory = Inventory.Create(dropId, ('Drop %s'):format(dropId:gsub('%D', '')), 'drop', playerInventory.slots, weight, playerInventory.maxWeight, false, items)
 
 	if not inventory then return end
 
@@ -1615,7 +1634,7 @@ exports('CreateDropFromPlayer', function(playerId)
 		instance = Player(playerId).state.instance
 	}
 
-	Inventory.Clear(playerInventory)
+	Inventory.Clear(playerInventory, kitKept and isKitItem or nil)
 	TriggerClientEvent('ox_inventory:createDrop', -1, dropId, Inventory.Drops[dropId])
 
 	return dropId
@@ -2229,7 +2248,7 @@ end
 exports('ReturnInventory', Inventory.Return)
 
 ---@param inv inventory
----@param keep? string | string[] an item or list of items to ignore while clearing items
+---@param keep? string | string[] | fun(item: SlotWithItem): boolean an item or list of items to ignore while clearing items, or a function saying which to keep
 function Inventory.Clear(inv, keep)
 	inv = Inventory(inv) --[[@as OxInventory]]
 
@@ -2270,6 +2289,16 @@ function Inventory.Clear(inv, keep)
 
 				::foundItem::
 			end
+		elseif keepType == 'function' then
+			for slot, v in pairs(inv.items) do
+				if keep(v) then
+					keptItems[v.slot] = v
+					newWeight += v.weight
+				elseif updateSlots then
+					inc += 1
+					updateSlots[inc] = { item = { slot = slot }, inventory = inv.id }
+				end
+			end
 		end
 
 		table.wipe(inv.items)
@@ -2307,6 +2336,11 @@ function Inventory.Clear(inv, keep)
 	if server.syncInventory then server.syncInventory(inv) end
 
 	inv.weapon = nil
+
+	-- What was worn went with the rest (or stayed, if kept): the weight limit, armour and
+	-- the GPS's minimap follow what's left in the Wearables slots.
+	require('modules.gear.server').apply(inv)
+	require('modules.wearables.server').syncEquipped(inv)
 end
 
 exports('ClearInventory', Inventory.Clear)
