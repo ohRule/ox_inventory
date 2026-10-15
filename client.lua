@@ -1065,6 +1065,25 @@ if not Utils or not Weapon or not Items or not Inventory then return end
 
 local invHotkeys = false
 
+-- The quick throw (G while aiming): one running at a time, and a short cooldown
+local quickThrowActive = false
+local quickThrowLastTime = 0
+local quickThrowCooldown = 3000
+
+---The first throwable weapon in the player's inventory, for the quick throw.
+---@return number? slot
+local function findThrowableSlot()
+	if not PlayerData or not PlayerData.inventory then return end
+
+	for slot, item in pairs(PlayerData.inventory) do
+		local data = item and item.name and Items[item.name]
+
+		if data and data.weapon and data.throwable then
+			return slot
+		end
+	end
+end
+
 ---@type function?
 local function registerCommands()
 	if client.enablestealcommand then
@@ -1180,6 +1199,84 @@ local function registerCommands()
 					lib.notify({ id = 'no_durability', type = 'error', description = locale('no_durability', currentWeapon.label) })
 				end
 			end
+		end
+	})
+
+	-- The quick throw: aiming a gun, G throws the first throwable you carry without
+	-- putting the gun away. A short throw clip and the projectile are played here; the
+	-- server takes one throwable from its slot as for a normal throw.
+	lib.addKeybind({
+		name = 'quickthrow',
+		description = locale('quick_throw'),
+		defaultKey = 'G',
+		onPressed = function()
+			if quickThrowActive or invOpen or invBusy or usingItem or lib.progressActive() then return end
+			if not PlayerData or not PlayerData.loaded or PlayerData.dead then return end
+			if EnableWeaponWheel or not client.player:get('canUseWeapons') then return end
+
+			-- A gun in hand (not a throwable), and aiming it
+			if not currentWeapon or currentWeapon.throwable then return end
+			if not IsPlayerFreeAiming(cache.playerId) then return end
+			if GetGameTimer() - quickThrowLastTime < quickThrowCooldown then return end
+
+			local throwableSlot = findThrowableSlot()
+			if not throwableSlot then return end
+
+			quickThrowActive = true
+
+			CreateThread(function()
+				local throwableItem = PlayerData.inventory[throwableSlot]
+				local throwableData = throwableItem and Items[throwableItem.name]
+
+				if not throwableData or not throwableData.hash then
+					quickThrowActive = false
+					return
+				end
+
+				local weaponHash = throwableData.hash
+
+				-- The game needs the ped to have the weapon to fire its projectile: given with
+				-- no ammo and not drawn, and taken away again after
+				local weaponWasAdded = false
+				if not HasPedGotWeapon(playerPed, weaponHash, false) then
+					GiveWeaponToPed(playerPed, weaponHash, 0, false, false)
+					weaponWasAdded = true
+				end
+
+				-- A short upper-body throw, so the gun stays up (pistol or rifle stance)
+				local animDict = currentWeapon.group == `GROUP_PISTOL`
+					and 'weapons@first_person@aim_rng@generic@pistol@shared@core'
+					or 'weapons@projectile@aim_throw_rifle'
+
+				lib.requestAnimDict(animDict)
+				TaskPlayAnim(playerPed, animDict, 'aim_throw_m', 8.0, -8.0, 600, 48, 0.0, false, false, false)
+
+				-- Released a moment into the clip, along the camera
+				Wait(260)
+
+				local camCoords = GetGameplayCamCoord()
+				local camRot = GetGameplayCamRot(2)
+				local pitch = math.rad(camRot.x)
+				local yaw = math.rad(camRot.z)
+				local dir = vec3(-math.sin(yaw) * math.cos(pitch), math.cos(yaw) * math.cos(pitch), math.sin(pitch))
+				local startCoords = camCoords + (dir * 1.6)
+				local endCoords = camCoords + (dir * 22.0)
+
+				ShootSingleBulletBetweenCoords(startCoords.x, startCoords.y, startCoords.z, endCoords.x, endCoords.y, endCoords.z,
+					1, true, weaponHash, playerPed, true, false, -1.0)
+
+				Wait(150)
+				ClearPedSecondaryTask(playerPed)
+
+				TriggerServerEvent('ox_inventory:updateWeapon', 'throw', nil, throwableSlot)
+
+				if weaponWasAdded then
+					RemoveWeaponFromPed(playerPed, weaponHash)
+				end
+
+				quickThrowLastTime = GetGameTimer()
+				quickThrowActive = false
+			end)
 		end
 	})
 
