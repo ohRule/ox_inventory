@@ -248,6 +248,41 @@ local function setHotbarHudVisible(visible)
 	SendNUIMessage({ action = 'setHotbarHud', data = hotbarHudVisible })
 end
 
+-- Other resources can hide the HUD hotbar for a while (exports.ox_inventory:hideHotbar),
+-- leaving the player's own setting above alone. Kept per calling resource, so two
+-- scripts don't undo each other, and dropped when that resource stops.
+local hotbarHiddenBy = {}
+
+local function hotbarHiddenByScript()
+	return next(hotbarHiddenBy) ~= nil
+end
+
+local function sendHotbarHidden()
+	SendNUIMessage({ action = 'setHotbarHidden', data = hotbarHiddenByScript() })
+end
+
+---Hides the hotbar on the HUD until the same resource calls this with false, or stops.
+---The open inventory still shows it, and its keys still work (for those, set the
+---invHotkeys state bag).
+---@param hidden? boolean false shows it again; true or nothing hides it
+exports('hideHotbar', function(hidden)
+	local resource = GetInvokingResource() or cache.resource
+	hotbarHiddenBy[resource] = hidden ~= false or nil
+	sendHotbarHidden()
+end)
+
+---@return boolean hidden whether the HUD hotbar is hidden, by a script or by the player
+exports('isHotbarHidden', function()
+	return hotbarHiddenByScript() or not hotbarHudVisible
+end)
+
+AddEventHandler('onResourceStop', function(resource)
+	if hotbarHiddenBy[resource] then
+		hotbarHiddenBy[resource] = nil
+		sendHotbarHidden()
+	end
+end)
+
 ---@param index number
 ---@return number?
 local function resolveHotbarSlot(index)
@@ -1944,6 +1979,7 @@ RegisterNetEvent('ox_inventory:setPlayerInventory', function(currentDrops, inven
 			imagepath = client.imagepath,
 			hotbarBinds = getHotbarPayload(),
 			hotbarHud = hotbarHudVisible,
+			hotbarHidden = hotbarHiddenByScript(),
 			quickCraft = QuickCraft.GetRecipes(),
 			navPanels = {
 				craft = client.navcraft,
@@ -2277,6 +2313,7 @@ RegisterNUICallback('uiLoaded', function(_, cb)
 	if PlayerData.loaded then
 		SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
 		SendNUIMessage({ action = 'setHotbarHud', data = hotbarHudVisible })
+		sendHotbarHidden()
 	end
 end)
 

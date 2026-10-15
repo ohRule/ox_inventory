@@ -84,6 +84,9 @@ const isWeaponBind = (index: number, binds: (HotbarBind | null)[], items: Slot[]
 const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false }) => {
   // HUD hotbar stays on unless the player hides it with the toggle / keybind
   const [hotbarVisible, setHotbarVisible] = useState(true);
+  // Hidden by another resource (exports.ox_inventory:hideHotbar): off the HUD only, the
+  // player's own setting (the eye) untouched
+  const [scriptHidden, setScriptHidden] = useState(false);
   const [usedUntil, setUsedUntil] = useState<number[]>(() => Array.from({ length: HOTBAR_SLOTS }, () => 0));
   const [equippedIndex, setEquippedIndex] = useState<number | null>(null);
   const equippedRef = useRef<HotbarItemRef | false>(false);
@@ -91,11 +94,13 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
   const binds = useAppSelector(selectHotbarBinds);
   const isBusy = useAppSelector(selectIsBusy);
 
-  useNuiEvent<{ hotbarHud?: boolean }>('init', (data) => {
+  useNuiEvent<{ hotbarHud?: boolean; hotbarHidden?: boolean }>('init', (data) => {
     if (typeof data.hotbarHud === 'boolean') setHotbarVisible(data.hotbarHud);
+    if (typeof data.hotbarHidden === 'boolean') setScriptHidden(data.hotbarHidden);
   });
 
   useNuiEvent<boolean>('setHotbarHud', (visible) => setHotbarVisible(!!visible));
+  useNuiEvent<boolean>('setHotbarHidden', (hidden) => setScriptHidden(!!hidden));
 
   const pulseBind = (index: number) => {
     const slot = index - 1;
@@ -187,7 +192,7 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
       <div className="hotbar-row">
         {/* Matches the eye button width so the slots stay centered when it appears */}
         {inventoryOpen && <div className="hotbar-toggle-spacer" aria-hidden="true" />}
-        {(hotbarVisible || inventoryOpen) && (
+        {((hotbarVisible && !scriptHidden) || inventoryOpen) && (
           <div className="hotbar-inner">
             {inventoryOpen && <HotbarUnbindZone />}
             <div className="hotbar-slots">
