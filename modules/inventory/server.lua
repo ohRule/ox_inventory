@@ -1967,7 +1967,9 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 
 				local totalWeight = toInventory.weight - toData.weight + toSlotWeight
 
-				if fromInventory.type == 'container' or sameInventory or totalWeight <= toInventory.maxWeight then
+				-- Out of the player's own open bag, its weight was already theirs; any other
+				-- container (a bag on the ground) is weighed like anything else.
+				if (fromInventory.type == 'container' and container) or sameInventory or totalWeight <= toInventory.maxWeight then
 					hookPayload.action = 'stack'
 
 					local hooks <close> = TriggerEventHooks('swapItems', hookPayload)
@@ -2008,7 +2010,7 @@ lib.callback.register('ox_inventory:swapItems', function(source, data)
 				toData.slot = data.toSlot
 				toData.weight = Inventory.SlotWeight(Items(toData.name), toData)
 
-				if fromInventory.type == 'container' or sameInventory or (toInventory.weight + toData.weight <= toInventory.maxWeight) then
+				if (fromInventory.type == 'container' and container) or sameInventory or (toInventory.weight + toData.weight <= toInventory.maxWeight) then
 					hookPayload.action = 'move'
 
 					local hooks <close> = TriggerEventHooks('swapItems', hookPayload)

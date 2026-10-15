@@ -272,6 +272,10 @@ local function openInventory(source, invType, data, ignoreSecurityChecks)
                         right = Inventory(data)
                     end
                 end
+            elseif invType == 'container' and data.groundBag then
+                -- A bag lying on the ground (it fell off someone: modules/gear/server.lua)
+                right = require('modules.gear.server').groundContainer(source, data.groundBag)
+                if not right then return end
             elseif invType == 'drop' then
                 right = Inventory(data.id)
             elseif invType == 'recycler' then

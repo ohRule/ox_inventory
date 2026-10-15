@@ -270,4 +270,191 @@ RegisterNetEvent('ox_inventory:gearHolsterStyle', function(slot, style)
 	end
 end)
 
+-- Bags on the ground. A worn bag that falls off a player (dropWornBag) lies there as
+-- itself: a prop each game draws (modules/groundbag/client.lua) with a target to open it
+-- or pick it up, kneeling for `ground.pickup` seconds (data/gear.lua). Its things stay
+-- in its container all along. Kept in memory, like drops: a restart loses the bags on
+-- the ground (their things stay saved under each bag's container id).
+local ground = Config.ground or {}
+local REACH = ground.reach or 2.0
+local PICKUP = math.floor((ground.pickup or 3) * 1000)
+
+local groundBags = {} -- [id] = { id, item, label, coords, instance, model }
+local picking = {}    -- [src] = { id, at }: a pickup started, for its timer
+
+---What every game is told: the bags on the ground (numbers only, for the state bag).
+local function publishGround()
+	local list = {}
+
+	for id, bag in pairs(groundBags) do
+		list[#list + 1] = {
+			id = id, label = bag.label, model = bag.model, instance = bag.instance,
+			x = bag.coords.x, y = bag.coords.y, z = bag.coords.z,
+		}
+	end
+
+	GlobalState.oxGroundBags = list
+end
+
+---A ground bag's container (its things), loaded if it isn't.
+local function containerOf(bag)
+	local metadata = bag.item.metadata
+	if not metadata.container then return end
+
+	local container = Inventory(metadata.container)
+
+	if not container and metadata.size then
+		container = Inventory.Create(metadata.container, bag.label, 'container', metadata.size[1], 0, metadata.size[2], false)
+	end
+
+	return container
+end
+
+---The player is by it: the same instance, and within reach (a ped's position is its
+---middle, about a metre above its feet; the bag lies on the ground).
+local function byBag(src, bag)
+	if Player(src).state.instance ~= bag.instance then return false end
+
+	local ped = GetPlayerPed(src)
+	if not ped or ped == 0 then return false end
+
+	local at = GetEntityCoords(ped)
+	local dx, dy, dz = at.x - bag.coords.x, at.y - bag.coords.y, at.z - bag.coords.z
+
+	return math.sqrt(dx * dx + dy * dy + dz * dz) <= REACH + 1.0
+end
+
+---A worn bag falls to the ground behind the player, with everything in it (a bag's
+---things are kept under its container id, so they go wherever it goes), and the weight
+---limit comes back down. For scripts that knock a player down or kill them. A job kit's
+---bag stays on them, and swapItems hooks aren't run. Returns the ground bag's id, or nil.
+---@param playerId number
+---@param coords? vector3 where it lands (on the ground just behind them when nil)
+---@return string?
+function Gear.dropWornBag(playerId, coords)
+	local inv = Inventory(playerId)
+	if not inv or not inv.player then return end
+
+	local slot = slotOf(inv, 'backpack')
+	local bag = slot and inv.items[slot]
+	if not bag or bag.metadata?.loadout then return end
+
+	if not coords then
+		local ped = GetPlayerPed(playerId)
+		if not ped or ped == 0 then return end
+		local at, heading = GetEntityCoords(ped), math.rad(GetEntityHeading(ped))
+		-- off their back: 0.6 m behind, at their feet
+		coords = vec3(at.x + math.sin(heading) * 0.6, at.y - math.cos(heading) * 0.6, at.z - 0.9)
+	end
+
+	-- Its own bag can't stay open on the right once it's gone.
+	if inv.containerSlot == slot then inv:closeInventory() end
+
+	local id
+	repeat id = ('bag-%s'):format(math.random(100000, 999999)) until not groundBags[id]
+
+	local item = table.clone(bag)
+	item.metadata = table.clone(bag.metadata)
+	local model = bags[bag.name] and bags[bag.name].drop
+
+	groundBags[id] = {
+		id = id,
+		item = item,
+		label = item.metadata.label or (Items(bag.name) or bag).label,
+		coords = coords,
+		instance = Player(playerId).state.instance,
+		model = model and GetHashKey(model) or nil,
+	}
+
+	inv.items[slot] = nil
+	inv.weight -= bag.weight
+	inv.changed = true
+
+	inv:syncSlotsWithClients({ { item = { slot = slot }, inventory = inv.id } }, true)
+	if server.syncInventory then server.syncInventory(inv) end
+	Gear.apply(inv)
+	publishGround()
+
+	return id
+end
+
+exports('dropWornBag', Gear.dropWornBag)
+
+---The things in a bag on the ground, for opening it (server.lua's openInventory, the
+---target's "Open"). Nil when it's gone, or the player isn't by it. It closes like a stash
+---when they walk off.
+---@param src number
+---@param id string
+function Gear.groundContainer(src, id)
+	local bag = groundBags[id]
+	if not bag or not byBag(src, bag) then return end
+
+	local container = containerOf(bag)
+	if not container then return end
+
+	container.coords = vec3(bag.coords.x, bag.coords.y, bag.coords.z)
+	container.distance = REACH + 1.0
+
+	return container
+end
+
+-- Picking one up: the timer is the server's too, so a game can't skip it.
+lib.callback.register('ox_inventory:groundBagPickupStart', function(src, id)
+	local bag = groundBags[id]
+	if not bag or not byBag(src, bag) then return false end
+
+	picking[src] = { id = id, at = GetGameTimer() }
+
+	return PICKUP
+end)
+
+lib.callback.register('ox_inventory:groundBagPickup', function(src, id)
+	local started = picking[src]
+	picking[src] = nil
+
+	local bag = groundBags[id]
+	if not bag then return false, 'ground_bag_gone' end
+	if not started or started.id ~= id or GetGameTimer() - started.at < PICKUP * 0.9 then return false end
+	if not byBag(src, bag) then return false, 'ground_bag_far' end
+
+	local inv = Inventory(src)
+	local item = Items(bag.item.name)
+	if not inv or not inv.player or not item then return false end
+
+	-- What's in it now goes into its weight (moves on the ground don't update it).
+	local container = containerOf(bag)
+	local metadata = table.clone(bag.item.metadata)
+	if container then metadata.weight = container.weight end
+
+	-- On their back if the backpack slot's free (as buying one does), else a pocket.
+	local wornSlot = slotOf(inv, 'backpack')
+	local wear = wornSlot and not inv.items[wornSlot] and item.wearable == 'backpack'
+	local slot = wear and wornSlot or Inventory.GetEmptySlot(inv)
+	if not slot then return false, 'ground_bag_no_room' end
+
+	local weight = Inventory.SlotWeight(item, { count = 1, metadata = metadata })
+	local limit = inv.maxWeight + (wear and bags[item.name] and bags[item.name].weight or 0)
+	if inv.weight + weight > limit then return false, 'ground_bag_heavy' end
+
+	groundBags[id] = nil
+	publishGround()
+
+	if container then
+		Inventory.CloseAll(container)
+		container.coords, container.distance = nil, nil
+	end
+
+	Inventory.SetSlot(inv, item, 1, metadata, slot)
+	inv:syncSlotsWithClients({ { item = inv.items[slot], inventory = inv.id } }, true)
+	if server.syncInventory then server.syncInventory(inv) end
+	Gear.apply(inv)
+	require('modules.wearables.server').syncEquipped(inv)
+
+	return true
+end)
+
+AddEventHandler('playerDropped', function()
+	picking[source] = nil
+end)
+
 return Gear

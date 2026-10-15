@@ -41,12 +41,19 @@ return {
 	gearOnly = { 'mp_m_ruck_bags', 'mp_f_ruck_bags', 'mp_m_ruck_holster', 'mp_f_ruck_holster', 'mp_m_ruck_waistband' },
 
 	-- Bags: what fits inside (weight in grams). Worn in the backpack slot, the player
-	-- can carry that much more. A bag keeps the size it was made with.
+	-- can carry that much more. A bag keeps the size it was made with. drop = the prop
+	-- it lies on the ground as when it falls off a player (exports.ox_inventory:dropWornBag,
+	-- for death scripts); without it, the usual drop prop.
 	bags = {
-		backpack_small = { slots = 10, weight = 10000 },
-		backpack = { slots = 20, weight = 20000 },
-		duffel_bag = { slots = 30, weight = 30000 },
+		backpack_small = { slots = 10, weight = 10000, drop = 'prop_michael_backpack' },
+		backpack = { slots = 20, weight = 20000, drop = 'prop_michael_backpack' },
+		duffel_bag = { slots = 30, weight = 30000, drop = 'prop_cs_heist_bag_02' },
 	},
+
+	-- A bag on the ground (it fell off someone) has a target: open it, or pick it up,
+	-- kneeling for `pickup` seconds (it goes on your back if the backpack slot's free,
+	-- else in a pocket). `reach`: how close, in metres.
+	ground = { pickup = 3, reach = 2.0 },
 
 	-- Armour. A carrier in the armour slot holds `plates` plates (open it from the
 	-- Wearables tab); the armour is what its plates give, each worn down by hits until
