@@ -237,6 +237,8 @@ do
 		hotbarBinds = {}
 		hotbarReady = false
 		SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
+		-- Back to character select: no hotbar till the next character has loaded
+		SendNUIMessage({ action = 'setHotbarLoaded', data = false })
 		return _onLogout(...)
 	end
 end
@@ -2313,10 +2315,17 @@ RegisterNUICallback('uiLoaded', function(_, cb)
 	client.uiLoaded = true
 	cb(1)
 
+	-- Hidden by a script before the page was there to hear it (one holding it off through
+	-- character select, before any character has loaded): told now, loaded or not
+	sendHotbarHidden()
+
+	-- The hotbar shows only while a character is loaded (init says so when one does; a page
+	-- loaded again mid-game hears it here)
+	SendNUIMessage({ action = 'setHotbarLoaded', data = PlayerData.loaded == true })
+
 	if PlayerData.loaded then
 		SendNUIMessage({ action = 'setupHotbar', data = getHotbarPayload() })
 		SendNUIMessage({ action = 'setHotbarHud', data = hotbarHudVisible })
-		sendHotbarHidden()
 	end
 end)
 

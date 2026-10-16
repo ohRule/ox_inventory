@@ -87,6 +87,9 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
   // Hidden by another resource (exports.ox_inventory:hideHotbar): off the HUD only, the
   // player's own setting (the eye) untouched
   const [scriptHidden, setScriptHidden] = useState(false);
+  // Only while a character is loaded: before one has (character select) there's nothing to
+  // show, and a logout back to it empties it again
+  const [loaded, setLoaded] = useState(false);
   const [usedUntil, setUsedUntil] = useState<number[]>(() => Array.from({ length: HOTBAR_SLOTS }, () => 0));
   const [equippedIndex, setEquippedIndex] = useState<number | null>(null);
   const equippedRef = useRef<HotbarItemRef | false>(false);
@@ -97,10 +100,12 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
   useNuiEvent<{ hotbarHud?: boolean; hotbarHidden?: boolean }>('init', (data) => {
     if (typeof data.hotbarHud === 'boolean') setHotbarVisible(data.hotbarHud);
     if (typeof data.hotbarHidden === 'boolean') setScriptHidden(data.hotbarHidden);
+    setLoaded(true);
   });
 
   useNuiEvent<boolean>('setHotbarHud', (visible) => setHotbarVisible(!!visible));
   useNuiEvent<boolean>('setHotbarHidden', (hidden) => setScriptHidden(!!hidden));
+  useNuiEvent<boolean>('setHotbarLoaded', (on) => setLoaded(!!on));
 
   const pulseBind = (index: number) => {
     const slot = index - 1;
@@ -183,6 +188,8 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [inventoryOpen, binds, items, isBusy]);
+
+  if (!loaded) return null;
 
   return (
     <div
