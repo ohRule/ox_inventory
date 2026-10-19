@@ -2364,6 +2364,51 @@ exports('getHudHighlight', function()
 	return hudHighlight
 end)
 
+-- Hotbar scale (0.75–1.35), the measured gap above it, and the slot highlight.
+-- ox_lib reads this so the progress bar sits on the hotbar and uses its colours.
+local hotbarScale = 1.0
+local hotbarBottom = nil
+local hotbarHighlight = hudHighlight
+local hotbarOpacity = 0.55
+
+local function normaliseOpacity(value)
+	value = tonumber(value)
+	if not value then return nil end
+	if value < 0.25 then value = 0.25 elseif value > 0.85 then value = 0.85 end
+	return value
+end
+
+local function setHotbarLayout(scale, bottom, highlight, opacity)
+	scale = tonumber(scale) or hotbarScale
+	if scale < 0.75 then scale = 0.75 elseif scale > 1.35 then scale = 1.35 end
+
+	local nextBottom = tonumber(bottom)
+	if not nextBottom or nextBottom <= 0 then nextBottom = nil end
+
+	local nextHighlight = normaliseHighlight(highlight) or hotbarHighlight
+	local nextOpacity = normaliseOpacity(opacity) or hotbarOpacity
+
+	if scale == hotbarScale and nextBottom == hotbarBottom and nextHighlight == hotbarHighlight and nextOpacity == hotbarOpacity then return end
+
+	hotbarScale = scale
+	hotbarBottom = nextBottom
+	hotbarHighlight = nextHighlight
+	hotbarOpacity = nextOpacity
+	TriggerEvent('ox_lib:setHotbarLayout', hotbarScale, hotbarBottom, hotbarHighlight, hotbarOpacity)
+end
+
+RegisterNUICallback('syncHotbarLayout', function(data, cb)
+	if type(data) == 'table' then
+		setHotbarLayout(data.scale, data.bottom, data.highlight, data.opacity)
+	end
+
+	cb(1)
+end)
+
+exports('getHotbarLayout', function()
+	return { scale = hotbarScale, bottom = hotbarBottom, highlight = hotbarHighlight, opacity = hotbarOpacity }
+end)
+
 RegisterNUICallback('getItemData', function(itemName, cb)
 	cb(Items[itemName])
 end)

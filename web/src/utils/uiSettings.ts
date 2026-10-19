@@ -1,4 +1,5 @@
 import { fetchNui } from './fetchNui';
+import { syncHotbarLayout } from './hotbarLayout';
 
 const STORAGE_KEY = 'ox_inventory_ui_settings';
 
@@ -103,4 +104,6 @@ export const applyUiSettings = (settings: UiSettings) => {
 
   // ruck_hud listens for this so its chrome matches the highlight colour.
   void fetchNui('syncHudHighlight', { rgb: highlight }).catch(() => undefined);
+  // ox_lib moves the progress bar up with the scaled hotbar.
+  syncHotbarLayout();
 };

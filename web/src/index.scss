@@ -656,6 +656,7 @@ body.inv-dragging {
   width: 100%;
   position: absolute;
   left: 0;
+  // ox_lib progress clearance uses this offset plus $gridSize. See utils/hotbarLayout.ts.
   bottom: 2vh;
   z-index: 2;
   // HUD hotbar must not intercept clicks while the inventory is closed

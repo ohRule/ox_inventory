@@ -12,6 +12,7 @@ import { onUnbindHotbar } from '../../dnd/onHotbar';
 import { DragSource, InventoryType, Slot } from '../../typings';
 import { Locale } from '../../store/locale';
 import { fetchNui } from '../../utils/fetchNui';
+import { syncHotbarLayout } from '../../utils/hotbarLayout';
 
 const EyeIcon: React.FC<{ slashed?: boolean }> = ({ slashed = false }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
@@ -102,6 +103,11 @@ const InventoryHotbar: React.FC<InventoryHotbarProps> = ({ inventoryOpen = false
     if (typeof data.hotbarHidden === 'boolean') setScriptHidden(data.hotbarHidden);
     setLoaded(true);
   });
+
+  useEffect(() => {
+    // Remeasure once the slots are on screen (or after they hide).
+    syncHotbarLayout();
+  }, [loaded, hotbarVisible, scriptHidden, inventoryOpen]);
 
   useNuiEvent<boolean>('setHotbarHud', (visible) => setHotbarVisible(!!visible));
   useNuiEvent<boolean>('setHotbarHidden', (hidden) => setScriptHidden(!!hidden));
