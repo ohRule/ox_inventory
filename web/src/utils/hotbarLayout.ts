@@ -16,6 +16,8 @@ export const syncHotbarLayout = () => {
     const highlight = style.getPropertyValue('--inv-highlight').trim();
     const opacity = Number(style.getPropertyValue('--inv-panel-alpha')) || 0.55;
     const slots = document.querySelector('.hotbar-slots');
+    // Slots are unmounted when the player or a script hides the HUD hotbar.
+    const active = !!slots;
     let bottom: number | null = null;
 
     // Prefer the real slot box so scale (transform-origin: center bottom) is included.
@@ -25,10 +27,10 @@ export const syncHotbarLayout = () => {
       bottom = Math.round(window.innerHeight - rect.top + gap);
     }
 
-    const payload = JSON.stringify({ scale, bottom, highlight, opacity });
+    const payload = JSON.stringify({ scale, bottom, highlight, opacity, active });
     if (payload === lastPayload) return;
     lastPayload = payload;
 
-    void fetchNui('syncHotbarLayout', { scale, bottom, highlight, opacity }).catch(() => undefined);
+    void fetchNui('syncHotbarLayout', { scale, bottom, highlight, opacity, active }).catch(() => undefined);
   });
 };

@@ -2370,6 +2370,7 @@ local hotbarScale = 1.0
 local hotbarBottom = nil
 local hotbarHighlight = hudHighlight
 local hotbarOpacity = 0.55
+local hotbarActive = true
 
 local function normaliseOpacity(value)
 	value = tonumber(value)
@@ -2378,7 +2379,7 @@ local function normaliseOpacity(value)
 	return value
 end
 
-local function setHotbarLayout(scale, bottom, highlight, opacity)
+local function setHotbarLayout(scale, bottom, highlight, opacity, active)
 	scale = tonumber(scale) or hotbarScale
 	if scale < 0.75 then scale = 0.75 elseif scale > 1.35 then scale = 1.35 end
 
@@ -2387,26 +2388,33 @@ local function setHotbarLayout(scale, bottom, highlight, opacity)
 
 	local nextHighlight = normaliseHighlight(highlight) or hotbarHighlight
 	local nextOpacity = normaliseOpacity(opacity) or hotbarOpacity
+	local nextActive = hotbarActive
 
-	if scale == hotbarScale and nextBottom == hotbarBottom and nextHighlight == hotbarHighlight and nextOpacity == hotbarOpacity then return end
+	-- nil leaves the last value, so an older UI build does not clear the hotbar.
+	if type(active) == 'boolean' then nextActive = active end
+	if not nextActive then nextBottom = nil end
+
+	if scale == hotbarScale and nextBottom == hotbarBottom and nextHighlight == hotbarHighlight and nextOpacity == hotbarOpacity and nextActive == hotbarActive then return end
 
 	hotbarScale = scale
 	hotbarBottom = nextBottom
 	hotbarHighlight = nextHighlight
 	hotbarOpacity = nextOpacity
-	TriggerEvent('ox_lib:setHotbarLayout', hotbarScale, hotbarBottom, hotbarHighlight, hotbarOpacity)
+	hotbarActive = nextActive
+	-- A nil bottom would swallow the later arguments, including whether the hotbar is showing.
+	TriggerEvent('ox_lib:setHotbarLayout', hotbarScale, hotbarBottom or 0, hotbarHighlight, hotbarOpacity, hotbarActive)
 end
 
 RegisterNUICallback('syncHotbarLayout', function(data, cb)
 	if type(data) == 'table' then
-		setHotbarLayout(data.scale, data.bottom, data.highlight, data.opacity)
+		setHotbarLayout(data.scale, data.bottom, data.highlight, data.opacity, data.active)
 	end
 
 	cb(1)
 end)
 
 exports('getHotbarLayout', function()
-	return { scale = hotbarScale, bottom = hotbarBottom, highlight = hotbarHighlight, opacity = hotbarOpacity }
+	return { scale = hotbarScale, bottom = hotbarBottom, highlight = hotbarHighlight, opacity = hotbarOpacity, active = hotbarActive }
 end)
 
 RegisterNUICallback('getItemData', function(itemName, cb)
